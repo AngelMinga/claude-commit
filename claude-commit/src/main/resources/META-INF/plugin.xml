@@ -1,0 +1,29 @@
+<idea-plugin>
+    <id>com.angelminga.claudecommit</id>
+    <name>Claude Commit</name>
+    <vendor>Angel Minga</vendor>
+
+    <description><![CDATA[
+    Analiza los cambios seleccionados en el diálogo de commit con Claude Code,
+    detecta el tipo de cambio (feat, fix, refactor, chore, docs, test, style, perf, build, ci)
+    y prellena el mensaje en formato Conventional Commits.
+    Requiere la CLI <code>claude</code> instalada y con sesión iniciada.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Claude Commit" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <action id="ClaudeCommit.Generate"
+                class="com.angelminga.claudecommit.GenerateCommitAction"
+                text="Generar Commit con Claude"
+                description="Detecta el tipo de cambio (feat, fix…) y genera el mensaje de commit"
+                icon="/icons/claudeCommit.svg">
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>
