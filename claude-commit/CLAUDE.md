@@ -21,7 +21,7 @@ claude-commit/
     │   ├── CommitMessageParser.kt       # respuesta de Claude → CommitSuggestion (sin deps de IntelliJ)
     │   ├── Shell.kt                     # ejecución de procesos con timeout y cancelación
     │   ├── ClaudeCommitSettings.kt      # estado persistente (modelo, idioma, timeout, sobrescritura)
-    │   └── ClaudeCommitConfigurable.kt  # UI de Settings → Tools → Claude Commit
+    │   └── ClaudeCommitConfigurable.kt  # UI de Settings → Tools → Commit Messages for Claude Code
     ├── main/resources/
     │   ├── META-INF/plugin.xml                    # id, dependencias, acción, notificaciones, settings
     │   ├── META-INF/claudeCommit-platformVcs.xml  # descriptor vacío de la dependencia opcional (ver abajo)
@@ -76,9 +76,9 @@ Flujo de `GenerateCommitAction` (registrada en `plugin.xml` dentro de `Vcs.Messa
    - `DiffCollector.collect` → construye un diff unificado con `IdeaTextPatchBuilder` + `UnifiedDiffWriter` a partir de las revisiones de IntelliJ (independiente del VCS, respeta los fragmentos excluidos en commits parciales). Los archivos sin versionar se convierten en `Change(null, CurrentContentRevision)`. Binarios → `[archivo binario]`. Trunca a 15 000 caracteres por archivo y 100 000 en total.
    - Obtiene la rama con `git rev-parse --abbrev-ref HEAD` (el prompt pide incluir IDs de ticket tipo `ABC-123`).
    - `ClaudeClient.suggest` → ejecuta `claude -p --tools "" --no-session-persistence [--model X]` mediante un login shell (`$SHELL -l -c`) en un directorio temporal del IDE (`PathManager.getTempPath()/claude-commit`), no en el repo, para que no cargue el CLAUDE.md, hooks ni MCP del proyecto. El diff va por stdin; el prompt y el modelo por variables de entorno (`CLAUDE_COMMIT_PROMPT`, `CLAUDE_COMMIT_MODEL`) para no interpolar texto en el script. `--model` se añade con `set --` + `"$@"`: `${VAR:+--model "$VAR"}` no funciona en zsh (lo pasa como un solo argumento). Antepone al `PATH` `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin` y `/usr/local/bin` porque IntelliJ lanzado desde el Dock no hereda el PATH de la terminal. `ClaudeClient.errorMessage` traduce los fallos de la CLI a mensajes en español: exit 127 → CLI no instalada; exit ≠ 0 con textos de `LOGIN_ERRORS` (p. ej. `Not logged in · Please run /login`, que la CLI escribe en stdout) → sin sesión o sesión caducada; resto → detalle crudo. Solo se buscan esos textos si el exit code es ≠ 0, para no confundirlos con un mensaje de commit que los mencione.
-3. `onSuccess` pide confirmación si ya hay un mensaje escrito (salvo que el ajuste lo desactive), lo escribe vía `CommitMessageI.setCommitMessage` y muestra una notificación del grupo `"Claude Commit"` (declarado en `plugin.xml`; el id debe coincidir).
+3. Si `overwriteWithoutAsking` está activo, el campo del mensaje se vacía al pulsar el botón y se restaura en `onThrowable`/`onCancel` (solo si sigue vacío). `onSuccess` pide confirmación si ya hay un mensaje escrito (salvo que el ajuste lo desactive), lo escribe vía `CommitMessageI.setCommitMessage` y muestra una notificación del grupo `"Commit Messages for Claude Code"` (declarado en `plugin.xml`; el id debe coincidir).
 
-Ajustes: `ClaudeCommitSettings` (servicio de aplicación, se guarda en `claudeCommit.xml`) con modelo, idioma, timeout y sobrescritura sin preguntar; UI en `ClaudeCommitConfigurable` (Settings → Tools → Claude Commit).
+Ajustes: `ClaudeCommitSettings` (servicio de aplicación, se guarda en `claudeCommit.xml`) con modelo, idioma, timeout y sobrescritura sin preguntar; UI en `ClaudeCommitConfigurable` (Settings → Tools → Commit Messages for Claude Code).
 
 `Shell.run` es el único punto de ejecución de procesos: lee stdout/stderr y escribe stdin en hilos de `AppExecutorUtil` (UTF-8; un `IOException` al escribir se ignora y manda el exit code), hace polling cada 200 ms y mata el proceso si el `ProgressIndicator` se cancela (lanza `ProcessCanceledException`) o se supera el timeout.
 

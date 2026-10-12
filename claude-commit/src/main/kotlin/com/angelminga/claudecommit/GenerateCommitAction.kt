@@ -61,6 +61,12 @@ class GenerateCommitAction : AnAction() {
         FileDocumentManager.getInstance().saveAllDocuments()
 
         val messageUi = handler?.ui?.commitMessageUi ?: messageControl as? CommitMessageUi
+        val commitMessage = messageControl as CommitMessageI
+        // Si se reemplaza sin preguntar, vaciamos el campo ya para que se vea que está trabajando.
+        // Guardamos el texto para restaurarlo si Claude falla o se cancela.
+        val previousMessage = messageUi?.text.orEmpty()
+        val clearedUpfront = ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking && previousMessage.isNotBlank()
+        if (clearedUpfront) commitMessage.setCommitMessage("")
         project.putUserData(RUNNING, true)
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Claude analizando cambios…", true) {
@@ -81,9 +87,9 @@ class GenerateCommitAction : AnAction() {
             }
 
             override fun onSuccess() {
-                val s = result ?: return
+                val s = result ?: return restorePrevious()
                 if (!confirmOverwrite(project, messageUi?.text)) return
-                (messageControl as CommitMessageI).setCommitMessage(s.message)
+                commitMessage.setCommitMessage(s.message)
                 val detail = buildString {
                     append("<b>Tipo detectado: ${s.type}</b>")
                     if (s.reason.isNotBlank()) append("<br/>${escape(s.reason)}")
@@ -92,7 +98,17 @@ class GenerateCommitAction : AnAction() {
             }
 
             override fun onThrowable(error: Throwable) {
+                restorePrevious()
                 notify(project, escape(error.message ?: error.toString()), NotificationType.ERROR)
+            }
+
+            override fun onCancel() {
+                restorePrevious()
+            }
+
+            /** Devuelve el texto vaciado al empezar, salvo que el usuario haya escrito algo mientras tanto. */
+            private fun restorePrevious() {
+                if (clearedUpfront && messageUi?.text.isNullOrBlank()) commitMessage.setCommitMessage(previousMessage)
             }
 
             override fun onFinished() {
@@ -103,7 +119,7 @@ class GenerateCommitAction : AnAction() {
 
     private fun confirmOverwrite(project: Project, current: String?): Boolean {
         if (current.isNullOrBlank() || ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking) return true
-        return MessageDialogBuilder.yesNo("Claude Commit", "Ya hay un mensaje de commit escrito. ¿Reemplazarlo por el generado?")
+        return MessageDialogBuilder.yesNo(ClaudeCommitSettings.PLUGIN_NAME, "Ya hay un mensaje de commit escrito. ¿Reemplazarlo por el generado?")
             .yesText("Reemplazar")
             .noText("Conservar")
             .ask(project)
@@ -121,8 +137,8 @@ class GenerateCommitAction : AnAction() {
 
     private fun notify(project: Project, content: String, type: NotificationType) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Claude Commit")
-            .createNotification("Claude Commit", content, type)
+            .getNotificationGroup(ClaudeCommitSettings.PLUGIN_NAME)
+            .createNotification(ClaudeCommitSettings.PLUGIN_NAME, content, type)
             .notify(project)
     }
 

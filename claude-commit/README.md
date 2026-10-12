@@ -1,4 +1,4 @@
-# Claude Commit (plugin para IntelliJ IDEA)
+# Commit Messages for Claude Code (plugin para IDEs de JetBrains)
 
 Añade un botón ✳ en el panel de commit. Al pulsarlo:
 

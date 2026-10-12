@@ -8,7 +8,7 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 
-class ClaudeCommitConfigurable : BoundConfigurable("Claude Commit") {
+class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitSettings.PLUGIN_NAME) {
 
     /** [value] es lo que se guarda (y se pasa a la CLI o al prompt); [label] es lo que ve el usuario. */
     private data class Option(val value: String, val label: String)
