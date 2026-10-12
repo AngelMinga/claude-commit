@@ -2,8 +2,10 @@ package com.angelminga.claudecommit
 
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.util.concurrency.AppExecutorUtil
 import java.io.File
-import java.util.concurrent.CompletableFuture
+import java.io.IOException
+import java.util.concurrent.Callable
 import java.util.concurrent.TimeUnit
 
 data class ShellResult(val exitCode: Int, val stdout: String, val stderr: String)
@@ -23,10 +25,19 @@ object Shell {
             .apply { environment().putAll(env) }
             .start()
 
-        val out = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().readText() }
-        val err = CompletableFuture.supplyAsync { process.errorStream.bufferedReader().readText() }
+        val executor = AppExecutorUtil.getAppExecutorService()
+        val out = executor.submit(Callable { process.inputStream.bufferedReader(Charsets.UTF_8).readText() })
+        val err = executor.submit(Callable { process.errorStream.bufferedReader(Charsets.UTF_8).readText() })
 
-        process.outputStream.bufferedWriter().use { w -> if (stdin != null) w.write(stdin) }
+        // stdin en otro hilo: si el proceso tarda en leer, la escritura se bloquea con diffs mayores que el buffer
+        // del pipe y no podríamos atender la cancelación ni el timeout.
+        executor.execute {
+            try {
+                process.outputStream.bufferedWriter(Charsets.UTF_8).use { w -> if (stdin != null) w.write(stdin) }
+            } catch (_: IOException) {
+                // El proceso terminó sin leer todo (p. ej. CLI no encontrada o proceso cancelado): lo informa el exit code.
+            }
+        }
 
         val deadline = System.currentTimeMillis() + timeoutSec * 1000
         while (!process.waitFor(200, TimeUnit.MILLISECONDS)) {

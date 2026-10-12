@@ -27,7 +27,7 @@ gradle wrapper           # genera ./gradlew
 ./gradlew buildPlugin
 ```
 
-El plugin queda en `build/distributions/claude-commit-1.0.0.zip`.
+El plugin queda en `build/distributions/claude-commit-<version>.zip`.
 
 Para probarlo sin instalar: `./gradlew runIde` abre un IntelliJ de pruebas con el plugin cargado.
 

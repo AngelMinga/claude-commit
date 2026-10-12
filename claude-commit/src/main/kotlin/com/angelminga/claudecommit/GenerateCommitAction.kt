@@ -47,13 +47,13 @@ class GenerateCommitAction : AnAction() {
         if (project.getUserData(RUNNING) == true) return
 
         val handler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER) as? AbstractCommitWorkflowHandler<*, *>
-        var changes: List<Change> = handler?.ui?.getIncludedChanges().orEmpty()
-        val unversioned: List<FilePath> = handler?.ui?.getIncludedUnversionedFiles().orEmpty()
+        val ui = handler?.ui
+        // Sin panel de commit no sabemos qué está marcado: usamos la changelist activa. Con panel, respetamos la selección.
+        val changes: List<Change> = ui?.getIncludedChanges()
+            ?: ChangeListManager.getInstance(project).defaultChangeList.changes.toList()
+        val unversioned: List<FilePath> = ui?.getIncludedUnversionedFiles().orEmpty()
         if (changes.isEmpty() && unversioned.isEmpty()) {
-            changes = ChangeListManager.getInstance(project).defaultChangeList.changes.toList()
-        }
-        if (changes.isEmpty() && unversioned.isEmpty()) {
-            notify(project, "No hay cambios seleccionados para el commit.", NotificationType.WARNING)
+            notify(project, "Marca al menos un archivo para el commit.", NotificationType.WARNING)
             return
         }
 
@@ -72,12 +72,12 @@ class GenerateCommitAction : AnAction() {
                 val diff = DiffCollector.collect(project, changes, unversioned)
                 if (diff.isBlank()) throw IllegalStateException("No se pudo obtener el diff de los cambios.")
 
-                val workDir = firstRoot(project, changes, unversioned)
-                val branch = Shell.run(listOf("git", "rev-parse", "--abbrev-ref", "HEAD"), workDir, timeoutSec = 10)
+                val repoRoot = firstRoot(project, changes, unversioned)
+                val branch = Shell.run(listOf("git", "rev-parse", "--abbrev-ref", "HEAD"), repoRoot, timeoutSec = 10)
                     .stdout.trim()
 
                 indicator.text = "Consultando a Claude…"
-                result = ClaudeClient.suggest(diff, branch, workDir, indicator)
+                result = ClaudeClient.suggest(diff, branch, indicator)
             }
 
             override fun onSuccess() {

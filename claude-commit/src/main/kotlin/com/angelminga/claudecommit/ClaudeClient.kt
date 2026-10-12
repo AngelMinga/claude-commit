@@ -1,5 +1,6 @@
 package com.angelminga.claudecommit
 
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.progress.ProgressIndicator
 import java.io.File
 
@@ -35,17 +36,21 @@ object ClaudeClient {
         <cuerpo opcional con viñetas breves, solo si aporta>
     """.trimIndent()
 
-    fun suggest(diff: String, branch: String, workDir: File, indicator: ProgressIndicator): CommitSuggestion {
+    fun suggest(diff: String, branch: String, indicator: ProgressIndicator): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
         val shell = System.getenv("SHELL")?.takeIf { it.isNotBlank() } ?: "/bin/zsh"
         // IntelliJ abierto desde el Dock no hereda el PATH de la terminal: lo completamos.
-        // El modelo va por variable de entorno para no interpolar texto del usuario en el script.
+        // El modelo va por variable de entorno para no interpolar texto del usuario en el script. Se añade con
+        // `set --` porque zsh no divide `${VAR:+--model "$VAR"}` en dos argumentos.
+        // --tools "": para clasificar el diff no necesita leer archivos ni ejecutar nada.
+        // --no-session-persistence: no deja una sesión en el historial por cada commit.
         val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
-            "claude -p \"\$CLAUDE_COMMIT_PROMPT\" \${CLAUDE_COMMIT_MODEL:+--model \"\$CLAUDE_COMMIT_MODEL\"}"
+            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
+            "claude -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
 
         val res = Shell.run(
             command = listOf(shell, "-l", "-c", script),
-            dir = workDir,
+            dir = neutralDir(),
             stdin = diff,
             env = mapOf(
                 "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language),
@@ -64,4 +69,10 @@ object ClaudeClient {
         }
         return CommitMessageParser.parse(res.stdout)
     }
+
+    /**
+     * Directorio fuera del repo: dentro del proyecto la CLI cargaría su CLAUDE.md, hooks y servidores MCP,
+     * lo que la ralentiza y puede alterar el formato de la respuesta. Todo lo que necesita va en el diff y el prompt.
+     */
+    private fun neutralDir(): File = File(PathManager.getTempPath(), "claude-commit").apply { mkdirs() }
 }
