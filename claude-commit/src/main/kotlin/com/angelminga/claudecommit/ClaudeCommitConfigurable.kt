@@ -2,11 +2,11 @@ package com.angelminga.claudecommit
 
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 
 class ClaudeCommitConfigurable : BoundConfigurable("Claude Commit") {
 
@@ -69,5 +69,5 @@ class ClaudeCommitConfigurable : BoundConfigurable("Claude Commit") {
     private fun withCurrent(options: List<Option>, current: String): List<Option> =
         if (current.isEmpty() || options.any { it.value == current }) options else options + Option(current, current)
 
-    private fun renderer() = SimpleListCellRenderer.create<Option>("") { it.label }
+    private fun renderer() = textListCellRenderer<Option?>("") { it?.label }
 }
