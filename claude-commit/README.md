@@ -10,7 +10,7 @@ Añade un botón ✳ en el panel de commit. Al pulsarlo:
 ## Requisitos
 - macOS con Claude Code instalado y sesión iniciada (`claude` → opción 1, suscripción).
 - JDK 21 (IntelliJ puede descargarlo: *Project Structure → SDK → Download JDK*).
-- IntelliJ IDEA 2024.3 o superior.
+- IntelliJ IDEA, WebStorm u otro IDE de JetBrains 2025.2 o superior (verificado en 2026.2 y 2026.3).
 
 ## Compilar
 

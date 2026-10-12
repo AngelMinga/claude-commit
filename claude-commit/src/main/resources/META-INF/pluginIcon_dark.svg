@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <!-- Línea de commits de git -->
+  <rect x="3" y="18.5" width="9" height="3" rx="1.5" fill="#CED0D6"/>
+  <rect x="28" y="18.5" width="9" height="3" rx="1.5" fill="#CED0D6"/>
+  <!-- Nodo de commit -->
+  <circle cx="20" cy="20" r="10.5" fill="#2B2D30" stroke="#D97757" stroke-width="3"/>
+  <!-- Asterisco de Claude -->
+  <g fill="#D97757">
+    <rect x="18.9" y="14" width="2.2" height="12" rx="1.1"/>
+    <rect x="18.9" y="14" width="2.2" height="12" rx="1.1" transform="rotate(45 20 20)"/>
+    <rect x="18.9" y="14" width="2.2" height="12" rx="1.1" transform="rotate(90 20 20)"/>
+    <rect x="18.9" y="14" width="2.2" height="12" rx="1.1" transform="rotate(-45 20 20)"/>
+  </g>
+</svg>

@@ -1,22 +1,36 @@
 package com.angelminga.claudecommit
 
+import com.intellij.openapi.diff.impl.patch.IdeaTextPatchBuilder
+import com.intellij.openapi.diff.impl.patch.UnifiedDiffWriter
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangesUtil
+import com.intellij.openapi.vcs.changes.CommitContext
+import com.intellij.openapi.vcs.changes.CurrentContentRevision
 import java.io.File
+import java.io.StringWriter
+import java.nio.file.Path
 
-/** Construye un diff legible solo con los archivos marcados en el diálogo de commit. */
+/**
+ * Construye un diff unificado solo con los archivos marcados en el diálogo de commit.
+ * Usa las revisiones de IntelliJ (funciona con cualquier VCS) y respeta los fragmentos excluidos en commits parciales.
+ */
 object DiffCollector {
 
     private const val MAX_TOTAL_CHARS = 100_000
     private const val MAX_FILE_CHARS = 15_000
 
-    fun collect(project: Project, changes: List<Change>): String {
+    fun collect(project: Project, changes: List<Change>, unversioned: List<FilePath>): String {
         val vcsManager = ProjectLevelVcsManager.getInstance(project)
+        val allChanges = changes + unversioned.map { Change(null, CurrentContentRevision.create(it)) }
         val out = StringBuilder()
 
-        for (change in changes) {
+        for (change in allChanges) {
+            ProgressManager.checkCanceled()
             if (out.length >= MAX_TOTAL_CHARS) {
                 out.append("\n[... diff truncado: hay más archivos ...]\n")
                 break
@@ -24,7 +38,6 @@ object DiffCollector {
             val filePath = ChangesUtil.getFilePath(change)
             val root = vcsManager.getVcsRootFor(filePath)?.path ?: project.basePath ?: continue
             val rootDir = File(root)
-            val relative = File(filePath.path).relativeToOrNull(rootDir)?.path ?: filePath.path
 
             val status = when (change.type) {
                 Change.Type.NEW -> "NUEVO"
@@ -32,30 +45,31 @@ object DiffCollector {
                 Change.Type.MOVED -> "MOVIDO/RENOMBRADO"
                 else -> "MODIFICADO"
             }
-            out.append("\n### $status: $relative\n")
-
-            change.beforeRevision?.file?.path?.let { before ->
-                if (change.type == Change.Type.MOVED) {
-                    val beforeRel = File(before).relativeToOrNull(rootDir)?.path ?: before
-                    out.append("(antes: $beforeRel)\n")
-                }
+            out.append("\n### $status: ${relative(filePath, rootDir)}\n")
+            if (change.type == Change.Type.MOVED) {
+                change.beforeRevision?.file?.let { out.append("(antes: ${relative(it, rootDir)})\n") }
             }
 
-            var fileDiff = Shell.run(listOf("git", "diff", "HEAD", "--", relative), rootDir, timeoutSec = 20).stdout
-
-            // Archivo nuevo sin agregar a git o repo sin commits: usamos el contenido.
-            if (fileDiff.isBlank() && change.type == Change.Type.NEW) {
-                val f = File(filePath.path)
-                if (f.isFile) {
-                    fileDiff = runCatching { f.readText() }.getOrDefault("[archivo binario o ilegible]")
-                        .lineSequence().joinToString("\n") { "+$it" }
-                }
-            }
-
+            val fileDiff = fileDiff(project, change, rootDir)
             out.append(fileDiff.take(MAX_FILE_CHARS))
             if (fileDiff.length > MAX_FILE_CHARS) out.append("\n[... archivo truncado ...]")
             out.append('\n')
         }
         return out.toString()
     }
+
+    private fun fileDiff(project: Project, change: Change, rootDir: File): String {
+        if (IdeaTextPatchBuilder.isBinaryRevision(change.beforeRevision) || IdeaTextPatchBuilder.isBinaryRevision(change.afterRevision)) {
+            return "[archivo binario]"
+        }
+        return try {
+            val patches = IdeaTextPatchBuilder.buildPatch(project, listOf(change), rootDir.toPath(), false, true)
+            StringWriter().also { UnifiedDiffWriter.write(project, patches, it, "\n", CommitContext()) }.toString()
+        } catch (e: VcsException) {
+            "[no se pudo obtener el diff: ${e.message}]"
+        }
+    }
+
+    private fun relative(path: FilePath, rootDir: File): String =
+        File(path.path).relativeToOrNull(rootDir)?.path ?: path.path
 }

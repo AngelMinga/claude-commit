@@ -12,9 +12,14 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.vcs</depends>
+    <depends optional="true" config-file="claudeCommit-platformVcs.xml">com.intellij.platform.vcs</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Claude Commit" displayType="BALLOON"/>
+        <applicationConfigurable parentId="tools"
+                                 instance="com.angelminga.claudecommit.ClaudeCommitConfigurable"
+                                 id="com.angelminga.claudecommit.settings"
+                                 displayName="Claude Commit"/>
     </extensions>
 
     <actions>
