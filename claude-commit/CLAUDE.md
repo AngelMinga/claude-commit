@@ -51,6 +51,10 @@ $G clean test buildPlugin
 
 Resultado: `build/distributions/claude-commit-<version>.zip` (la versión sale de `version` en `build.gradle.kts`). Se instala con *Settings → Plugins → ⚙ → Install Plugin from Disk…* y reiniciando el IDE. Para reinstalar, desinstalar antes la versión previa o subir `version`.
 
+### Publicar en JetBrains Marketplace
+
+La primera versión se sube a mano en plugins.jetbrains.com (*Upload plugin*). Las siguientes: subir `version` en `build.gradle.kts`, añadir la entrada en `<change-notes>` de `plugin.xml` y ejecutar `PUBLISH_TOKEN=<token> ./gradlew publishPlugin` (token en Marketplace → Profile → My Tokens; nunca en el repo). Antes de publicar: `./gradlew verifyPluginStructure` y el Plugin Verifier contra los IDEs objetivo. La descripción del `plugin.xml` está en inglés (requisito del Marketplace) con un párrafo en español.
+
 ### Otros
 
 ```bash

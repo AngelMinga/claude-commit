@@ -1,14 +1,49 @@
 <idea-plugin>
     <id>com.angelminga.claudecommit</id>
     <name>Claude Commit</name>
-    <vendor>Angel Minga</vendor>
+    <vendor url="https://github.com/AngelMinga/claude-commit">Angel Minga</vendor>
 
     <description><![CDATA[
-    Analiza los cambios seleccionados en el diálogo de commit con Claude Code,
-    detecta el tipo de cambio (feat, fix, refactor, chore, docs, test, style, perf, build, ci)
-    y prellena el mensaje en formato Conventional Commits.
-    Requiere la CLI <code>claude</code> instalada y con sesión iniciada.
+    <p>Generates <a href="https://www.conventionalcommits.org">Conventional Commits</a> messages from the
+    changes you select in the commit panel, using your local
+    <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> CLI.</p>
+
+    <p>Click the button next to <i>Amend</i> in the commit panel and the plugin will:</p>
+    <ul>
+      <li>build a diff of the checked files only (including unversioned files and partial commits),</li>
+      <li>send it to <code>claude -p</code> together with the current branch name,</li>
+      <li>show the detected change type (<code>feat</code>, <code>fix</code>, <code>refactor</code>, <code>docs</code>…) and why,</li>
+      <li>fill in the commit message for you to review.</li>
+    </ul>
+
+    <p><b>Requirements:</b> the <code>claude</code> CLI installed and logged in. It uses your Claude
+    subscription; no API key is needed. Not affiliated with Anthropic.</p>
+
+    <p><b>Settings</b> (<i>Settings → Tools → Claude Commit</i>): model (Haiku, Sonnet, Opus), message
+    language, timeout, and whether to overwrite an existing message without asking.</p>
+
+    <p><i>Español:</i> genera mensajes de commit en formato Conventional Commits con Claude Code a partir de
+    los archivos marcados en el panel de commit. Requiere la CLI <code>claude</code> instalada y con sesión iniciada.</p>
     ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>1.1.3</h3>
+    <ul><li>Clear message when the Claude Code CLI is not logged in or the session has expired.</li></ul>
+    <h3>1.1.2</h3>
+    <ul>
+      <li>Fixed model selection with zsh.</li>
+      <li>Cancel and timeout now work with large diffs; UTF-8 everywhere.</li>
+      <li>Faster, more stable responses: no tools, no saved sessions, runs outside the project.</li>
+      <li>Warns when no file is checked instead of using the whole changelist.</li>
+    </ul>
+    <h3>1.1.0</h3>
+    <ul>
+      <li>Settings page: model, language, timeout, overwrite confirmation.</li>
+      <li>Unversioned files and partial commits are included; works with any VCS.</li>
+      <li>Saves open editors before building the diff; button disabled while running.</li>
+      <li>New plugin and button icons; compatible with 2025.2 – 2026.3.</li>
+    </ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.vcs</depends>

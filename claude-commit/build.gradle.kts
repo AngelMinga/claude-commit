@@ -34,6 +34,10 @@ intellijPlatform {
         }
     }
     buildSearchableOptions = false
+    // ./gradlew publishPlugin con PUBLISH_TOKEN (Marketplace → Profile → My Tokens). La primera versión se sube a mano.
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
 }
 
 kotlin {
