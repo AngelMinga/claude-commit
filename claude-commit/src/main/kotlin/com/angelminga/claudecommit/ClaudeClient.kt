@@ -60,15 +60,27 @@ object ClaudeClient {
             indicator = indicator,
         )
 
-        if (res.exitCode == 127 || res.stderr.contains("command not found")) {
-            throw IllegalStateException("No se encontró la CLI 'claude'. Instala Claude Code y ejecuta 'claude' una vez para iniciar sesión.")
-        }
-        if (res.exitCode != 0 || res.stdout.isBlank()) {
-            val detail = res.stderr.ifBlank { res.stdout }.take(500)
-            throw IllegalStateException("Claude falló (código ${res.exitCode}): $detail")
-        }
+        errorMessage(res)?.let { throw IllegalStateException(it) }
         return CommitMessageParser.parse(res.stdout)
     }
+
+    /** Traduce un resultado fallido de la CLI a un mensaje accionable; null si fue bien. */
+    internal fun errorMessage(res: ShellResult): String? {
+        val output = res.stderr + "\n" + res.stdout
+        return when {
+            res.exitCode == 127 || (res.exitCode != 0 && res.stderr.contains("command not found")) ->
+                "No se encontró la CLI 'claude'. Instala Claude Code y ejecuta 'claude' una vez para iniciar sesión."
+            res.exitCode != 0 && LOGIN_ERRORS.any { output.contains(it, ignoreCase = true) } ->
+                "No has iniciado sesión en Claude Code o la sesión caducó. Abre una terminal, ejecuta 'claude' " +
+                    "y elige iniciar sesión con tu suscripción; luego vuelve a pulsar el botón."
+            res.exitCode != 0 || res.stdout.isBlank() ->
+                "Claude falló (código ${res.exitCode}): ${res.stderr.ifBlank { res.stdout }.take(500)}"
+            else -> null
+        }
+    }
+
+    // Textos con los que la CLI indica que falta sesión o que caducó (p. ej. "Not logged in · Please run /login").
+    private val LOGIN_ERRORS = listOf("not logged in", "please run /login", "invalid api key", "token has expired", "authentication_error")
 
     /**
      * Directorio fuera del repo: dentro del proyecto la CLI cargaría su CLAUDE.md, hooks y servidores MCP,
