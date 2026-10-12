@@ -10,41 +10,43 @@ class ClaudeClientErrorTest {
     private fun error(exitCode: Int, stdout: String = "", stderr: String = "") =
         ClaudeClient.errorMessage(ShellResult(exitCode, stdout, stderr))
 
+    private val notLoggedIn = "You are not logged in to Claude Code"
+
     @Test
-    fun `respuesta correcta no es error`() {
-        assertNull(error(0, stdout = "TIPO: feat\nRAZON: x\nMENSAJE:\nfeat: algo"))
+    fun `successful reply is not an error`() {
+        assertNull(error(0, stdout = "TYPE: feat\nREASON: x\nMESSAGE:\nfeat: something"))
     }
 
     @Test
-    fun `respuesta correcta que menciona los textos de error no es error`() {
-        assertNull(error(0, stdout = "TIPO: fix\nRAZON: x\nMENSAJE:\nfix: evitar 'command not found' y 'Not logged in'"))
+    fun `successful reply mentioning the error texts is not an error`() {
+        assertNull(error(0, stdout = "TYPE: fix\nREASON: x\nMESSAGE:\nfix: handle 'command not found' and 'Not logged in'"))
     }
 
     @Test
-    fun `sin sesión iniciada (salida real de la CLI)`() {
+    fun `not logged in (actual CLI output)`() {
         val msg = error(1, stdout = "Not logged in · Please run /login")!!
-        assertTrue(msg, msg.startsWith("No has iniciado sesión en Claude Code"))
+        assertTrue(msg, msg.startsWith(notLoggedIn))
     }
 
     @Test
-    fun `sesión caducada`() {
+    fun `expired session`() {
         val msg = error(1, stderr = "API Error: 401 OAuth token has expired. Please obtain a new token.")!!
-        assertTrue(msg, msg.startsWith("No has iniciado sesión en Claude Code"))
+        assertTrue(msg, msg.startsWith(notLoggedIn))
     }
 
     @Test
-    fun `CLI no instalada`() {
+    fun `CLI not installed`() {
         val msg = error(127, stderr = "zsh:1: command not found: claude")!!
-        assertTrue(msg, msg.startsWith("No se encontró la CLI 'claude'"))
+        assertTrue(msg, msg.startsWith("The 'claude' CLI was not found"))
     }
 
     @Test
-    fun `otro error muestra el detalle`() {
-        assertEquals("Claude falló (código 2): boom", error(2, stderr = "boom"))
+    fun `other errors show the details`() {
+        assertEquals("Claude failed (exit code 2): boom", error(2, stderr = "boom"))
     }
 
     @Test
-    fun `salida vacía con exit 0 es error`() {
-        assertEquals("Claude falló (código 0): ", error(0))
+    fun `empty output with exit 0 is an error`() {
+        assertEquals("Claude failed (exit code 0): ", error(0))
     }
 }

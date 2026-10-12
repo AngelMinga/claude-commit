@@ -22,13 +22,14 @@ import com.intellij.openapi.vcs.changes.ChangesUtil
 import com.intellij.vcs.commit.AbstractCommitWorkflowHandler
 import com.intellij.vcs.commit.CommitMessageUi
 import java.io.File
+import java.io.IOException
 
 /**
- * Botón en el diálogo/panel de commit:
- * 1. Toma los cambios marcados para commit (incluidos los archivos sin versionar).
- * 2. Arma el diff con las revisiones de IntelliJ.
- * 3. Se lo pasa a `claude -p` (usa tu suscripción de Claude).
- * 4. Muestra el tipo detectado (feat, fix…) y prellena el mensaje.
+ * Button in the commit dialog/panel:
+ * 1. Takes the changes checked for commit (including unversioned files).
+ * 2. Builds the diff from IntelliJ's revisions.
+ * 3. Passes it to `claude -p` (uses your Claude subscription).
+ * 4. Shows the detected type (feat, fix…) and fills in the message.
  */
 class GenerateCommitAction : AnAction() {
 
@@ -37,7 +38,7 @@ class GenerateCommitAction : AnAction() {
     override fun update(e: AnActionEvent) {
         val project = e.project
         e.presentation.isVisible = project != null && e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL) != null
-        // Deshabilitado mientras hay una consulta en curso para evitar lanzarla dos veces.
+        // Disabled while a request is running so it cannot be started twice.
         e.presentation.isEnabled = e.presentation.isVisible && project?.getUserData(RUNNING) != true
     }
 
@@ -48,42 +49,48 @@ class GenerateCommitAction : AnAction() {
 
         val handler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER) as? AbstractCommitWorkflowHandler<*, *>
         val ui = handler?.ui
-        // Sin panel de commit no sabemos qué está marcado: usamos la changelist activa. Con panel, respetamos la selección.
+        // Without a commit panel we can't know what is checked, so we use the active changelist.
+        // With a panel, we respect the selection.
         val changes: List<Change> = ui?.getIncludedChanges()
             ?: ChangeListManager.getInstance(project).defaultChangeList.changes.toList()
         val unversioned: List<FilePath> = ui?.getIncludedUnversionedFiles().orEmpty()
         if (changes.isEmpty() && unversioned.isEmpty()) {
-            notify(project, "Marca al menos un archivo para el commit.", NotificationType.WARNING)
+            notify(project, "Check at least one file to commit.", NotificationType.WARNING)
             return
         }
 
-        // El diff se arma con lo que hay en disco: guardamos antes las ediciones pendientes.
+        // The diff is built from what is on disk, so save pending edits first.
         FileDocumentManager.getInstance().saveAllDocuments()
 
         val messageUi = handler?.ui?.commitMessageUi ?: messageControl as? CommitMessageUi
         val commitMessage = messageControl as CommitMessageI
-        // Si se reemplaza sin preguntar, vaciamos el campo ya para que se vea que está trabajando.
-        // Guardamos el texto para restaurarlo si Claude falla o se cancela.
+        // When overwriting without asking, clear the field right away so it's clear the plugin is working.
+        // Keep the text to restore it if Claude fails or the task is cancelled.
         val previousMessage = messageUi?.text.orEmpty()
         val clearedUpfront = ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking && previousMessage.isNotBlank()
         if (clearedUpfront) commitMessage.setCommitMessage("")
         project.putUserData(RUNNING, true)
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Claude analizando cambios…", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Claude is analyzing your changes…", true) {
             private var result: CommitSuggestion? = null
 
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
-                indicator.text = "Preparando diff…"
+                indicator.text = "Preparing diff…"
                 val diff = DiffCollector.collect(project, changes, unversioned)
-                if (diff.isBlank()) throw IllegalStateException("No se pudo obtener el diff de los cambios.")
+                if (diff.isBlank()) throw IllegalStateException("Could not build the diff of the changes.")
 
                 val repoRoot = firstRoot(project, changes, unversioned)
-                val branch = Shell.run(listOf("git", "rev-parse", "--abbrev-ref", "HEAD"), repoRoot, timeoutSec = 10)
-                    .stdout.trim()
+                val branch = git(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")?.trim().orEmpty()
 
-                indicator.text = "Consultando a Claude…"
-                result = ClaudeClient.suggest(diff, branch, indicator)
+                val recentCommits = if (ClaudeCommitSettings.getInstance().state.imitateRepoStyle) {
+                    recentCommitSubjects(repoRoot)
+                } else {
+                    emptyList()
+                }
+
+                indicator.text = "Asking Claude…"
+                result = ClaudeClient.suggest(diff, branch, recentCommits, indicator)
             }
 
             override fun onSuccess() {
@@ -91,7 +98,7 @@ class GenerateCommitAction : AnAction() {
                 if (!confirmOverwrite(project, messageUi?.text)) return
                 commitMessage.setCommitMessage(s.message)
                 val detail = buildString {
-                    append("<b>Tipo detectado: ${s.type}</b>")
+                    append("<b>Detected type: ${s.type}</b>")
                     if (s.reason.isNotBlank()) append("<br/>${escape(s.reason)}")
                 }
                 notify(project, detail, NotificationType.INFORMATION)
@@ -106,7 +113,7 @@ class GenerateCommitAction : AnAction() {
                 restorePrevious()
             }
 
-            /** Devuelve el texto vaciado al empezar, salvo que el usuario haya escrito algo mientras tanto. */
+            /** Puts back the text cleared at the start, unless the user typed something in the meantime. */
             private fun restorePrevious() {
                 if (clearedUpfront && messageUi?.text.isNullOrBlank()) commitMessage.setCommitMessage(previousMessage)
             }
@@ -117,11 +124,24 @@ class GenerateCommitAction : AnAction() {
         })
     }
 
+    /** Titles of the latest commits (no merges); empty if it isn't a git repo or has no commits yet. */
+    private fun recentCommitSubjects(repoRoot: File): List<String> =
+        git(repoRoot, "log", "-n", ClaudeClient.RECENT_COMMITS.toString(), "--no-merges", "--format=%s")
+            ?.let { ClaudeClient.parseRecentCommits(it) }
+            .orEmpty()
+
+    /** Output of a git command, or null if it fails or git isn't installed (e.g. projects using another VCS). */
+    private fun git(repoRoot: File, vararg args: String): String? = try {
+        Shell.run(listOf("git", *args), repoRoot, timeoutSec = 10).takeIf { it.exitCode == 0 }?.stdout
+    } catch (_: IOException) {
+        null
+    }
+
     private fun confirmOverwrite(project: Project, current: String?): Boolean {
         if (current.isNullOrBlank() || ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking) return true
-        return MessageDialogBuilder.yesNo(ClaudeCommitSettings.PLUGIN_NAME, "Ya hay un mensaje de commit escrito. ¿Reemplazarlo por el generado?")
-            .yesText("Reemplazar")
-            .noText("Conservar")
+        return MessageDialogBuilder.yesNo(ClaudeCommitSettings.PLUGIN_NAME, "There is already a commit message. Replace it with the generated one?")
+            .yesText("Replace")
+            .noText("Keep")
             .ask(project)
     }
 

@@ -13,11 +13,10 @@ import com.intellij.openapi.vcs.changes.CommitContext
 import com.intellij.openapi.vcs.changes.CurrentContentRevision
 import java.io.File
 import java.io.StringWriter
-import java.nio.file.Path
 
 /**
- * Construye un diff unificado solo con los archivos marcados en el diálogo de commit.
- * Usa las revisiones de IntelliJ (funciona con cualquier VCS) y respeta los fragmentos excluidos en commits parciales.
+ * Builds a unified diff with only the files checked in the commit dialog.
+ * Uses IntelliJ's revisions (works with any VCS) and honors the hunks excluded in partial commits.
  */
 object DiffCollector {
 
@@ -32,7 +31,7 @@ object DiffCollector {
         for (change in allChanges) {
             ProgressManager.checkCanceled()
             if (out.length >= MAX_TOTAL_CHARS) {
-                out.append("\n[... diff truncado: hay más archivos ...]\n")
+                out.append("\n[... diff truncated: more files not shown ...]\n")
                 break
             }
             val filePath = ChangesUtil.getFilePath(change)
@@ -40,19 +39,19 @@ object DiffCollector {
             val rootDir = File(root)
 
             val status = when (change.type) {
-                Change.Type.NEW -> "NUEVO"
-                Change.Type.DELETED -> "ELIMINADO"
-                Change.Type.MOVED -> "MOVIDO/RENOMBRADO"
-                else -> "MODIFICADO"
+                Change.Type.NEW -> "NEW"
+                Change.Type.DELETED -> "DELETED"
+                Change.Type.MOVED -> "MOVED/RENAMED"
+                else -> "MODIFIED"
             }
             out.append("\n### $status: ${relative(filePath, rootDir)}\n")
             if (change.type == Change.Type.MOVED) {
-                change.beforeRevision?.file?.let { out.append("(antes: ${relative(it, rootDir)})\n") }
+                change.beforeRevision?.file?.let { out.append("(previously: ${relative(it, rootDir)})\n") }
             }
 
             val fileDiff = fileDiff(project, change, rootDir)
             out.append(fileDiff.take(MAX_FILE_CHARS))
-            if (fileDiff.length > MAX_FILE_CHARS) out.append("\n[... archivo truncado ...]")
+            if (fileDiff.length > MAX_FILE_CHARS) out.append("\n[... file truncated ...]")
             out.append('\n')
         }
         return out.toString()
@@ -60,13 +59,13 @@ object DiffCollector {
 
     private fun fileDiff(project: Project, change: Change, rootDir: File): String {
         if (IdeaTextPatchBuilder.isBinaryRevision(change.beforeRevision) || IdeaTextPatchBuilder.isBinaryRevision(change.afterRevision)) {
-            return "[archivo binario]"
+            return "[binary file]"
         }
         return try {
             val patches = IdeaTextPatchBuilder.buildPatch(project, listOf(change), rootDir.toPath(), false, true)
             StringWriter().also { UnifiedDiffWriter.write(project, patches, it, "\n", CommitContext()) }.toString()
         } catch (e: VcsException) {
-            "[no se pudo obtener el diff: ${e.message}]"
+            "[could not build the diff: ${e.message}]"
         }
     }
 

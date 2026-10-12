@@ -1,47 +1,75 @@
-# Commit Messages for Claude Code (plugin para IDEs de JetBrains)
+# Commit Messages for Claude Code
 
-Añade un botón ✳ en el panel de commit. Al pulsarlo:
+A JetBrains IDE plugin that writes [Conventional Commits](https://www.conventionalcommits.org) messages for you with the [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI.
 
-1. Toma los archivos marcados para el commit.
-2. Envía el diff a `claude -p` (usa tu suscripción Pro/Max, sin API key).
-3. Muestra una notificación con el **tipo detectado** (`feat`, `fix`, `refactor`…) y el motivo.
-4. Prellena el mensaje en formato Conventional Commits.
+It adds a button to the commit panel. When you click it, the plugin:
 
-## Requisitos
-- macOS con Claude Code instalado y sesión iniciada (`claude` → opción 1, suscripción).
-- JDK 21 (IntelliJ puede descargarlo: *Project Structure → SDK → Download JDK*).
-- IntelliJ IDEA, WebStorm u otro IDE de JetBrains 2025.2 o superior (verificado en 2026.2 y 2026.3).
+1. Takes the files checked for the commit (including unversioned files and partial commits).
+2. Sends the diff to `claude -p`, using your Claude Pro/Max subscription (no API key).
+3. Shows a notification with the **detected type** (`feat`, `fix`, `refactor`…) and the reason.
+4. Fills in the commit message for you to review.
 
-## Compilar
+Not affiliated with Anthropic.
 
-**Opción A – desde IntelliJ (más fácil)**
-1. *File → Open* → selecciona la carpeta `claude-commit`.
-2. Espera a que importe Gradle (usa JDK 21 si lo pregunta).
-3. Panel **Gradle** → `Tasks → intellij platform → buildPlugin`.
+## Requirements
 
-**Opción B – terminal**
+- Claude Code installed and logged in (run `claude` once and log in with your subscription).
+- IntelliJ IDEA, WebStorm, Rider, Android Studio, DataGrip or another JetBrains IDE, version 2025.2 or later (verified on 2026.2 and 2026.3).
+- To build it: JDK 21 (IntelliJ can download it: *Project Structure → SDK → Download JDK*).
+
+## Install
+
+From the IDE (once published on JetBrains Marketplace): *Settings → Plugins → Marketplace*, search for **Commit Messages for Claude Code**.
+
+From a file: *Settings → Plugins → ⚙ → Install Plugin from Disk…* → choose the `.zip` → restart the IDE.
+
+## Usage
+
+1. Open the commit panel (`⌘K`).
+2. Check the files to commit.
+3. Click **Generate Commit Message with Claude** next to *Amend*.
+4. Review the message and commit.
+
+Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message with Claude".
+
+## Settings
+
+*Settings → Tools → Commit Messages for Claude Code*:
+
+- **Model**: CLI default, Haiku (fastest), Sonnet or Opus.
+- **Message language**: English by default.
+- **Timeout** in seconds.
+- **Match the style of recent commits**: sends the titles of the last 20 commits so Claude follows your scopes and conventions.
+- **Replace the existing message without asking**.
+
+See [PRIVACY.md](../PRIVACY.md) for what is sent to Claude.
+
+## Build
+
+**Option A – from IntelliJ (easiest)**
+
+1. *File → Open* → select the `claude-commit` folder.
+2. Wait for the Gradle import (use JDK 21 if asked).
+3. **Gradle** tool window → `Tasks → intellij platform → buildPlugin`.
+
+**Option B – terminal**
+
 ```bash
-brew install gradle      # solo la primera vez
+brew install gradle      # first time only
 cd claude-commit
-gradle wrapper           # genera ./gradlew
+gradle wrapper           # generates ./gradlew
 ./gradlew buildPlugin
 ```
 
-El plugin queda en `build/distributions/claude-commit-<version>.zip`.
+The plugin is written to `build/distributions/claude-commit-<version>.zip`.
 
-Para probarlo sin instalar: `./gradlew runIde` abre un IntelliJ de pruebas con el plugin cargado.
+To try it without installing: `./gradlew runIde` opens a sandbox IntelliJ with the plugin loaded.
 
-## Instalar
-*Settings → Plugins → ⚙ → Install Plugin from Disk…* → elige el `.zip` → reinicia.
+## Customize
 
-## Uso
-1. Abre el panel de commit (`⌘K`).
-2. Marca los archivos.
-3. Pulsa el botón **Generar Commit con Claude** junto al campo del mensaje.
-4. Revisa el mensaje y confirma.
-
-Atajo opcional: *Settings → Keymap* → busca "Generar Commit con Claude".
-
-## Personalizar
-El prompt (idioma, tipos, formato) está en
+The prompt (types, format, style section) lives in
 `src/main/kotlin/com/angelminga/claudecommit/ClaudeClient.kt`.
+
+## License
+
+[MIT](../LICENSE)

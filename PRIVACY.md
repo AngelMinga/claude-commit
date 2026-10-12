@@ -1,6 +1,6 @@
 # Privacy Policy — Commit Messages for Claude Code
 
-_Last updated: October 12, 2026_
+_Last updated: October 12, 2026 (version 1.3.0)_
 
 Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that generates commit messages using the Claude Code CLI installed on your computer. This page explains what data the plugin handles and where it goes.
 
@@ -12,13 +12,14 @@ Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that ge
 
 ## What data is sent, and when
 
-Data is only processed when you click **Generar Commit con Claude** in the commit panel. Nothing is sent in the background.
+Data is only processed when you click **Generate Commit Message with Claude** in the commit panel. Nothing is sent in the background.
 
 On each click, the plugin builds the following and passes it to the local `claude` CLI:
 
 - the diff of the files you **checked** in the commit panel (unchecked files are not included), limited to 15,000 characters per file and 100,000 characters in total;
 - the file paths and their change status (new, modified, deleted, moved);
 - the name of the current Git branch;
+- the titles (first line only) of the last 20 commits of the repository, so Claude can match their style. You can turn this off in _Settings → Tools → Commit Messages for Claude Code_ ("Match the style of recent commits in the repository");
 - the instructions (prompt) that ask Claude to write the message, including the language you selected.
 
 ## Who receives it
@@ -29,7 +30,7 @@ How Anthropic processes, retains or uses that data is governed by **your agreeme
 
 To limit what is shared, the plugin runs the CLI with:
 
-- `--tools ""`: Claude cannot read other files or run commands; it only sees the diff above;
+- `--tools ""`: Claude cannot read other files or run commands; it only sees the data listed above;
 - `--no-session-persistence`: the CLI does not save the conversation to your local session history;
 - a temporary working directory outside your project, so the CLI does not load your project's `CLAUDE.md`, hooks or MCP servers.
 
@@ -37,18 +38,8 @@ To limit what is shared, the plugin runs the CLI with:
 
 ## What is stored on your computer
 
-The plugin only stores its settings (model, message language, timeout and the "overwrite without asking" option) in your IDE configuration, in `claudeCommit.xml`. They never leave your computer.
+The plugin only stores its settings (model, message language, timeout, the "match recent commits style" option and the "overwrite without asking" option) in your IDE configuration, in `claudeCommit.xml`. They never leave your computer.
 
 ## Changes and contact
 
 Changes to this policy will be published in this file in the [GitHub repository](https://github.com/AngelMinga/claude-commit). For questions, open an issue there.
-
----
-
-## Resumen en español
-
-- El plugin **no recoge ni envía datos** a su autor ni a terceros, y no tiene telemetría.
-- Solo al **pulsar el botón**, pasa a la CLI `claude` de tu equipo el diff de los archivos **marcados**, sus rutas, la rama actual y el prompt. La CLI los envía a **Anthropic** con **tu cuenta de Claude**; su tratamiento lo rige tu acuerdo con Anthropic y su [política de privacidad](https://www.anthropic.com/legal/privacy).
-- Claude no puede leer otros archivos ni ejecutar comandos (`--tools ""`) y la sesión no se guarda (`--no-session-persistence`).
-- Los ajustes se guardan solo en tu IDE (`claudeCommit.xml`).
-- **No marques archivos con secretos** si no quieres que se envíen a Anthropic.

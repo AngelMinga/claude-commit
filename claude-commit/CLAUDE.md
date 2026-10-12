@@ -2,86 +2,90 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Qué es
+## What it is
 
-Plugin de IntelliJ IDEA (Kotlin, IntelliJ Platform Gradle Plugin 2.x) que añade un botón en el panel de commit: envía el diff de los archivos marcados a la CLI `claude -p` (suscripción, sin API key) y prellena el mensaje en formato Conventional Commits. Todo el texto visible al usuario, el prompt y los comentarios están en español.
+A JetBrains IDE plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that adds a button to the commit panel: it sends the diff of the checked files to the `claude -p` CLI (subscription, no API key) and fills in a Conventional Commits message. **All user-facing text, the prompt, code comments and documentation are in English**; keep new code consistent. The only Spanish left on purpose is backward compatibility: legacy labels accepted by `CommitMessageParser` and `ClaudeCommitSettings.LEGACY_LANGUAGES`.
 
-## Estructura
+## Structure
 
 ```text
 claude-commit/
-├── build.gradle.kts                 # IntelliJ Platform Gradle Plugin, versión del IDE destino, sinceBuild, deps de test
+├── build.gradle.kts                 # IntelliJ Platform Gradle Plugin, target IDE version, sinceBuild, test deps, publishing
 ├── gradle.properties / settings.gradle.kts
-├── gradle/wrapper/                  # solo gradle-wrapper.properties (Gradle 8.14.3), sin script gradlew
+├── gradle/wrapper/                  # only gradle-wrapper.properties (Gradle 8.14.3), no gradlew script
 └── src/
     ├── main/kotlin/com/angelminga/claudecommit/
-    │   ├── GenerateCommitAction.kt      # botón del panel de commit; orquesta todo el flujo
-    │   ├── DiffCollector.kt             # cambios marcados → diff unificado
-    │   ├── ClaudeClient.kt              # prompt + ejecución de `claude -p`
-    │   ├── CommitMessageParser.kt       # respuesta de Claude → CommitSuggestion (sin deps de IntelliJ)
-    │   ├── Shell.kt                     # ejecución de procesos con timeout y cancelación
-    │   ├── ClaudeCommitSettings.kt      # estado persistente (modelo, idioma, timeout, sobrescritura)
-    │   └── ClaudeCommitConfigurable.kt  # UI de Settings → Tools → Commit Messages for Claude Code
+    │   ├── GenerateCommitAction.kt      # commit panel button; orchestrates the whole flow
+    │   ├── DiffCollector.kt             # checked changes → unified diff
+    │   ├── ClaudeClient.kt              # prompt + running `claude -p` + CLI error messages
+    │   ├── CommitMessageParser.kt       # Claude's reply → CommitSuggestion (no IntelliJ deps)
+    │   ├── Shell.kt                     # process execution with timeout and cancellation
+    │   ├── ClaudeCommitSettings.kt      # persistent state (model, language, timeout, style, overwrite)
+    │   └── ClaudeCommitConfigurable.kt  # UI for Settings → Tools → Commit Messages for Claude Code
     ├── main/resources/
-    │   ├── META-INF/plugin.xml                    # id, dependencias, acción, notificaciones, settings
-    │   ├── META-INF/claudeCommit-platformVcs.xml  # descriptor vacío de la dependencia opcional (ver abajo)
-    │   ├── META-INF/pluginIcon.svg / pluginIcon_dark.svg  # icono 40×40 de la lista de plugins (tema claro/oscuro)
-    │   └── icons/claudeCommit.svg / _dark.svg     # icono 16×16 del botón (mismo diseño que pluginIcon)
+    │   ├── META-INF/plugin.xml                    # id, dependencies, action, notifications, settings, description, change notes
+    │   ├── META-INF/claudeCommit-platformVcs.xml  # empty descriptor for the optional dependency (see below)
+    │   ├── META-INF/pluginIcon.svg / pluginIcon_dark.svg  # 40×40 icon for the plugin list (light/dark)
+    │   └── icons/claudeCommit.svg / _dark.svg     # 16×16 button icon (same design as pluginIcon)
     └── test/kotlin/com/angelminga/claudecommit/
         ├── CommitMessageParserTest.kt
-        ├── ClaudeClientErrorTest.kt     # mensajes de error de la CLI (sin sesión, no instalada…)
-        └── ShellTest.kt                 # stdin grande, Broken pipe, timeout
+        ├── ClaudeClientErrorTest.kt     # CLI error messages (not logged in, not installed…)
+        ├── ClaudeClientPromptTest.kt    # prompt, style section and git log parsing
+        ├── ClaudeCommitSettingsTest.kt  # default language and migration of legacy Spanish values
+        └── ShellTest.kt                 # large stdin, Broken pipe, timeout
 ```
 
-## Comandos
+The repository root is the parent folder (`plugins-intellij/`), which also holds `LICENSE` (MIT) and `PRIVACY.md`.
 
-### Generar el .zip instalable
+## Commands
 
-El repo no incluye el script `gradlew`. Dos opciones:
+### Build the installable .zip
+
+The repo doesn't include the `gradlew` script. Two options:
 
 ```bash
-# A) Generar el wrapper una vez (requiere `gradle` instalado, p. ej. `brew install gradle`) y usarlo
+# A) Generate the wrapper once (requires `gradle`, e.g. `brew install gradle`) and use it
 gradle wrapper
 ./gradlew buildPlugin
 
-# B) Sin wrapper: usar el Gradle 8.14.3 que IntelliJ ya descargó en la caché
+# B) Without a wrapper: use the Gradle 8.14.3 that IntelliJ already downloaded into the cache
 G=$(ls -d ~/.gradle/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3/bin/gradle)
 $G clean test buildPlugin
 ```
 
-Resultado: `build/distributions/claude-commit-<version>.zip` (la versión sale de `version` en `build.gradle.kts`). Se instala con *Settings → Plugins → ⚙ → Install Plugin from Disk…* y reiniciando el IDE. Para reinstalar, desinstalar antes la versión previa o subir `version`.
+Output: `build/distributions/claude-commit-<version>.zip` (the version comes from `version` in `build.gradle.kts`). Install it with *Settings → Plugins → ⚙ → Install Plugin from Disk…* and restart the IDE. To reinstall, uninstall the previous version first or bump `version`.
 
-### Publicar en JetBrains Marketplace
+### Publish to JetBrains Marketplace
 
-La primera versión se sube a mano en plugins.jetbrains.com (*Upload plugin*). Las siguientes: subir `version` en `build.gradle.kts`, añadir la entrada en `<change-notes>` de `plugin.xml` y ejecutar `PUBLISH_TOKEN=<token> ./gradlew publishPlugin` (token en Marketplace → Profile → My Tokens; nunca en el repo). Antes de publicar: `./gradlew verifyPluginStructure` y el Plugin Verifier contra los IDEs objetivo. La descripción del `plugin.xml` está en inglés (requisito del Marketplace) con un párrafo en español.
+The first version was uploaded by hand at plugins.jetbrains.com. For later ones: bump `version` in `build.gradle.kts`, add an entry to `<change-notes>` in `plugin.xml` and run `PUBLISH_TOKEN=<token> ./gradlew publishPlugin` (token from Marketplace → Profile → My Tokens; never commit it). Before publishing, run `./gradlew verifyPluginStructure` and the Plugin Verifier against the target IDEs.
 
-### Otros
+### Other
 
 ```bash
-./gradlew runIde        # abre un IntelliJ sandbox con el plugin cargado
-./gradlew test          # tests JUnit 4
-./gradlew test --tests 'com.angelminga.claudecommit.CommitMessageParserTest'   # un solo test
+./gradlew runIde        # opens a sandbox IntelliJ with the plugin loaded
+./gradlew test          # JUnit 4 tests
+./gradlew test --tests 'com.angelminga.claudecommit.CommitMessageParserTest'   # a single test class
 ```
 
-- Requiere JDK 21 (`jvmToolchain(21)`). Compila contra IntelliJ IDEA Community 2025.2; `sinceBuild = 252`. Dependencias de VCS en `plugin.xml`: `com.intellij.modules.vcs` (obligatoria; en ≤ 262 el VCS está en el núcleo) y `com.intellij.platform.vcs` opcional con `claudeCommit-platformVcs.xml` vacío (desde 263 el VCS es ese plugin y sin esta dependencia sus clases no son visibles). No quitar ninguna de las dos. Para comprobar compatibilidad con un IDE local: `java -jar verifier-cli-<ver>-all.jar check-plugin build/distributions/claude-commit-<version>.zip "<IDE>.app/Contents"`. Compilar contra 2026.3 requiere IntelliJ Platform Gradle Plugin ≥ 2.19 y Gradle 9.
-- `buildSearchableOptions = false` y `kotlin.stdlib.default.dependency=false` (se usa la stdlib que trae la plataforma).
-- `bundledModule("intellij.platform.vcs.impl")` es necesario: `AbstractCommitWorkflowHandler`, `IdeaTextPatchBuilder` y `UnifiedDiffWriter` viven en ese módulo y en 2025.2 no están en el classpath por defecto.
+- Requires JDK 21 (`jvmToolchain(21)`). Compiles against IntelliJ IDEA Community 2025.2; `sinceBuild = 252`. VCS dependencies in `plugin.xml`: `com.intellij.modules.vcs` (required; up to 262 VCS lives in the platform core) and `com.intellij.platform.vcs` as optional with an empty `claudeCommit-platformVcs.xml` (since 263 VCS is that plugin and without this dependency its classes aren't visible). Don't remove either one. To check compatibility with a local IDE: `java -jar verifier-cli-<ver>-all.jar check-plugin build/distributions/claude-commit-<version>.zip "<IDE>.app/Contents"`. Compiling against 2026.3 requires IntelliJ Platform Gradle Plugin ≥ 2.19 and Gradle 9.
+- `buildSearchableOptions = false` and `kotlin.stdlib.default.dependency=false` (the platform's stdlib is used).
+- `bundledModule("intellij.platform.vcs.impl")` is required: `AbstractCommitWorkflowHandler`, `IdeaTextPatchBuilder` and `UnifiedDiffWriter` live in that module and aren't on the default classpath in 2025.2.
 
-## Arquitectura
+## Architecture
 
-Flujo de `GenerateCommitAction` (registrada en `plugin.xml` dentro de `Vcs.MessageActionGroup`):
+`GenerateCommitAction` flow (registered in `plugin.xml` under `Vcs.MessageActionGroup`):
 
-1. En el EDT obtiene los cambios incluidos (`handler.ui.getIncludedChanges()`) y los archivos sin versionar marcados (`getIncludedUnversionedFiles()`); si el panel no está disponible usa la changelist activa; si hay panel y no hay nada marcado, avisa y no hace nada. Guarda los documentos abiertos (`saveAllDocuments`) y marca el proyecto con la clave `RUNNING`, que deshabilita el botón hasta `onFinished`.
-2. Lanza un `Task.Backgroundable` que:
-   - `DiffCollector.collect` → construye un diff unificado con `IdeaTextPatchBuilder` + `UnifiedDiffWriter` a partir de las revisiones de IntelliJ (independiente del VCS, respeta los fragmentos excluidos en commits parciales). Los archivos sin versionar se convierten en `Change(null, CurrentContentRevision)`. Binarios → `[archivo binario]`. Trunca a 15 000 caracteres por archivo y 100 000 en total.
-   - Obtiene la rama con `git rev-parse --abbrev-ref HEAD` (el prompt pide incluir IDs de ticket tipo `ABC-123`).
-   - `ClaudeClient.suggest` → ejecuta `claude -p --tools "" --no-session-persistence [--model X]` mediante un login shell (`$SHELL -l -c`) en un directorio temporal del IDE (`PathManager.getTempPath()/claude-commit`), no en el repo, para que no cargue el CLAUDE.md, hooks ni MCP del proyecto. El diff va por stdin; el prompt y el modelo por variables de entorno (`CLAUDE_COMMIT_PROMPT`, `CLAUDE_COMMIT_MODEL`) para no interpolar texto en el script. `--model` se añade con `set --` + `"$@"`: `${VAR:+--model "$VAR"}` no funciona en zsh (lo pasa como un solo argumento). Antepone al `PATH` `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin` y `/usr/local/bin` porque IntelliJ lanzado desde el Dock no hereda el PATH de la terminal. `ClaudeClient.errorMessage` traduce los fallos de la CLI a mensajes en español: exit 127 → CLI no instalada; exit ≠ 0 con textos de `LOGIN_ERRORS` (p. ej. `Not logged in · Please run /login`, que la CLI escribe en stdout) → sin sesión o sesión caducada; resto → detalle crudo. Solo se buscan esos textos si el exit code es ≠ 0, para no confundirlos con un mensaje de commit que los mencione.
-3. Si `overwriteWithoutAsking` está activo, el campo del mensaje se vacía al pulsar el botón y se restaura en `onThrowable`/`onCancel` (solo si sigue vacío). `onSuccess` pide confirmación si ya hay un mensaje escrito (salvo que el ajuste lo desactive), lo escribe vía `CommitMessageI.setCommitMessage` y muestra una notificación del grupo `"Commit Messages for Claude Code"` (declarado en `plugin.xml`; el id debe coincidir).
+1. On the EDT it reads the included changes (`handler.ui.getIncludedChanges()`) and the checked unversioned files (`getIncludedUnversionedFiles()`); without a commit panel it uses the active changelist; with a panel and nothing checked, it warns and stops. It saves open documents (`saveAllDocuments`) and marks the project with the `RUNNING` key, which disables the button until `onFinished`.
+2. It starts a `Task.Backgroundable` that:
+   - `DiffCollector.collect` → builds a unified diff with `IdeaTextPatchBuilder` + `UnifiedDiffWriter` from IntelliJ's revisions (VCS-agnostic, honors hunks excluded in partial commits). Unversioned files become `Change(null, CurrentContentRevision)`. Binaries → `[binary file]`. Truncated to 15,000 characters per file and 100,000 in total.
+   - Reads the branch (`git rev-parse --abbrev-ref HEAD`; the prompt asks to include ticket IDs like `ABC-123`) and, if `imitateRepoStyle` is on, the titles of the last 20 commits (`git log --no-merges --format=%s`), which `ClaudeClient.styleSection` adds to the prompt as a style reference; the language setting wins over the history's language. Both calls go through `git()`, which returns null if git fails or isn't installed. If what is sent to Claude changes, update `../PRIVACY.md`.
+   - `ClaudeClient.suggest` → runs `claude -p --tools "" --no-session-persistence [--model X]` through a login shell (`$SHELL -l -c`) in an IDE temp directory (`PathManager.getTempPath()/claude-commit`), not in the repo, so it doesn't load the project's CLAUDE.md, hooks or MCP servers. The diff goes through stdin; the prompt and model through environment variables (`CLAUDE_COMMIT_PROMPT`, `CLAUDE_COMMIT_MODEL`) to avoid interpolating text into the script. `--model` is added with `set --` + `"$@"`: `${VAR:+--model "$VAR"}` doesn't work in zsh (it passes a single argument). `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin` and `/usr/local/bin` are prepended to `PATH` because IntelliJ launched from the Dock doesn't inherit the terminal's PATH. `ClaudeClient.errorMessage` turns CLI failures into actionable messages: exit 127 → CLI not installed; exit ≠ 0 with a `LOGIN_ERRORS` text (e.g. `Not logged in · Please run /login`, which the CLI writes to stdout) → not logged in or session expired; anything else → raw details. Those texts are only matched when the exit code is ≠ 0, so a commit message that mentions them isn't mistaken for an error.
+3. If `overwriteWithoutAsking` is on, the message field is cleared when the button is clicked and restored in `onThrowable`/`onCancel` (only if it's still empty). `onSuccess` asks for confirmation if a message was already typed (unless the setting disables it), writes it via `CommitMessageI.setCommitMessage` and shows a notification from the `"Commit Messages for Claude Code"` group (declared in `plugin.xml`; the id must match `ClaudeCommitSettings.PLUGIN_NAME`).
 
-Ajustes: `ClaudeCommitSettings` (servicio de aplicación, se guarda en `claudeCommit.xml`) con modelo, idioma, timeout y sobrescritura sin preguntar; UI en `ClaudeCommitConfigurable` (Settings → Tools → Commit Messages for Claude Code).
+Settings: `ClaudeCommitSettings` (application service, stored in `claudeCommit.xml`) with model, language (default `English`), timeout, match repo style and overwrite without asking; UI in `ClaudeCommitConfigurable`. `loadState` migrates the Spanish language names stored by versions ≤ 1.2.0 (`LEGACY_LANGUAGES`).
 
-`Shell.run` es el único punto de ejecución de procesos: lee stdout/stderr y escribe stdin en hilos de `AppExecutorUtil` (UTF-8; un `IOException` al escribir se ignora y manda el exit code), hace polling cada 200 ms y mata el proceso si el `ProgressIndicator` se cancela (lanza `ProcessCanceledException`) o se supera el timeout.
+`Shell.run` is the only place that runs processes: it reads stdout/stderr and writes stdin on `AppExecutorUtil` threads (UTF-8; an `IOException` while writing is ignored and the exit code decides), polls every 200 ms and kills the process if the `ProgressIndicator` is cancelled (throws `ProcessCanceledException`) or the timeout expires.
 
-### Contrato del prompt ↔ parser
+### Prompt ↔ parser contract
 
-El prompt en `ClaudeClient` exige la respuesta con líneas `TIPO:`, `RAZON:` y `MENSAJE:`; `CommitMessageParser.parse` las extrae con regex. Si se cambia el formato del prompt hay que actualizar el parser y sus tests (y viceversa). `CommitMessageParser` no depende de IntelliJ a propósito, para poder testearlo con JUnit puro. Si Claude no respeta el formato, se usa toda la salida como mensaje y el tipo se deduce del prefijo del título; tipos fuera de la lista `TYPES` se marcan como "(no estándar)".
+The prompt in `ClaudeClient` requires a reply with `TYPE:`, `REASON:` and `MESSAGE:` lines; `CommitMessageParser.parse` extracts them with regexes (it also accepts the legacy `TIPO`/`RAZON`/`MENSAJE` labels). If the prompt format changes, update the parser and its tests (and vice versa). `CommitMessageParser` has no IntelliJ dependencies on purpose, so it can be tested with plain JUnit. If Claude ignores the format, the whole output is used as the message and the type is inferred from the title prefix; types outside `TYPES` are marked "(non-standard)".

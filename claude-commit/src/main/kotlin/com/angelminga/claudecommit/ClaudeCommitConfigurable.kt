@@ -10,41 +10,35 @@ import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 
 class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitSettings.PLUGIN_NAME) {
 
-    /** [value] es lo que se guarda (y se pasa a la CLI o al prompt); [label] es lo que ve el usuario. */
+    /** [value] is what gets stored (and passed to the CLI or the prompt); [label] is what the user sees. */
     private data class Option(val value: String, val label: String)
 
     private val settings get() = ClaudeCommitSettings.getInstance().state
 
     private val models = listOf(
-        Option("", "Por defecto de la CLI"),
-        Option("haiku", "Haiku — más rápido"),
-        Option("sonnet", "Sonnet — equilibrado"),
-        Option("opus", "Opus — más capaz"),
+        Option("", "CLI default"),
+        Option("haiku", "Haiku — fastest"),
+        Option("sonnet", "Sonnet — balanced"),
+        Option("opus", "Opus — most capable"),
     )
 
-    private val languages = listOf(
-        Option("español", "Español"),
-        Option("inglés", "Inglés"),
-        Option("portugués", "Portugués"),
-        Option("francés", "Francés"),
-        Option("alemán", "Alemán"),
-        Option("italiano", "Italiano"),
-    )
+    private val languages = listOf("English", "Spanish", "Portuguese", "French", "German", "Italian")
+        .map { Option(it, it) }
 
     override fun createPanel(): DialogPanel {
         val modelOptions = withCurrent(models, settings.model.orEmpty().trim())
         val languageOptions = withCurrent(languages, settings.language?.trim() ?: ClaudeCommitSettings.DEFAULT_LANGUAGE)
 
         return panel {
-            row("Modelo:") {
+            row("Model:") {
                 comboBox(modelOptions, renderer())
                     .bindItem(
                         { modelOptions.firstOrNull { it.value == settings.model.orEmpty().trim() } ?: modelOptions.first() },
                         { settings.model = it?.value.orEmpty() },
                     )
-                    .comment("Se pasa a la CLI como <code>--model</code>.")
+                    .comment("Passed to the CLI as <code>--model</code>.")
             }
-            row("Idioma del mensaje:") {
+            row("Message language:") {
                 comboBox(languageOptions, renderer())
                     .bindItem(
                         {
@@ -54,18 +48,23 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitSettings.PLUGIN_N
                         { settings.language = it?.value ?: ClaudeCommitSettings.DEFAULT_LANGUAGE },
                     )
             }
-            row("Tiempo máximo (segundos):") {
+            row("Timeout (seconds):") {
                 intTextField(ClaudeCommitSettings.MIN_TIMEOUT_SEC..ClaudeCommitSettings.MAX_TIMEOUT_SEC)
                     .bindIntText({ settings.timeoutSec }, { settings.timeoutSec = it })
             }
             row {
-                checkBox("Reemplazar el mensaje existente sin preguntar")
+                checkBox("Match the style of recent commits in the repository")
+                    .bindSelected({ settings.imitateRepoStyle }, { settings.imitateRepoStyle = it })
+                    .comment("Sends the titles of the last ${ClaudeClient.RECENT_COMMITS} commits to Claude as a reference.")
+            }
+            row {
+                checkBox("Replace the existing message without asking")
                     .bindSelected({ settings.overwriteWithoutAsking }, { settings.overwriteWithoutAsking = it })
             }
         }
     }
 
-    /** Conserva un valor guardado que no esté en la lista (p. ej. un modelo escrito a mano en versiones anteriores). */
+    /** Keeps a stored value that isn't in the list (e.g. a model typed by hand in older versions). */
     private fun withCurrent(options: List<Option>, current: String): List<Option> =
         if (current.isEmpty() || options.any { it.value == current }) options else options + Option(current, current)
 

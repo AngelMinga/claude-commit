@@ -4,46 +4,75 @@ import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.progress.ProgressIndicator
 import java.io.File
 
-/** Llama a la CLI `claude -p` (usa la sesión de tu suscripción, sin API key). */
+/** Calls the `claude -p` CLI (uses your subscription's session, no API key needed). */
 object ClaudeClient {
 
-    private fun prompt(branch: String, language: String) = """
-        Analiza el siguiente diff y clasifica el cambio según Conventional Commits.
+    // Number of recent titles sent as a style reference, and the maximum length of each one.
+    const val RECENT_COMMITS = 20
+    private const val MAX_SUBJECT_CHARS = 120
 
-        Tipos válidos:
-        - feat: nueva funcionalidad para el usuario
-        - fix: corrección de un bug
-        - refactor: cambio de código que no agrega funcionalidad ni corrige bugs
-        - perf: mejora de rendimiento
-        - style: formato, espacios, punto y coma (sin cambio de lógica)
-        - docs: solo documentación
-        - test: agrega o corrige tests
-        - build: sistema de build o dependencias (package.json, gradle, pubspec…)
-        - ci: configuración de CI/CD
-        - chore: tareas de mantenimiento que no tocan código fuente ni tests
-        - revert: revierte un commit anterior
+    // Multi-line variable parts are joined outside trimIndent so they don't break its indentation handling.
+    internal fun prompt(branch: String, language: String, recentCommits: List<String> = emptyList()): String {
+        val intro = """
+            Analyze the following diff and classify the change according to Conventional Commits.
 
-        Rama actual: $branch. Si el nombre de la rama contiene un ID de ticket (ej. ABC-123), inclúyelo en el título.
+            Valid types:
+            - feat: a new feature for the user
+            - fix: a bug fix
+            - refactor: a code change that neither adds a feature nor fixes a bug
+            - perf: a performance improvement
+            - style: formatting, whitespace, semicolons (no logic change)
+            - docs: documentation only
+            - test: adds or fixes tests
+            - build: build system or dependencies (package.json, gradle, pubspec…)
+            - ci: CI/CD configuration
+            - chore: maintenance tasks that don't touch source code or tests
+            - revert: reverts a previous commit
 
-        Escribe la razón, el título y el cuerpo en $language. Las etiquetas TIPO, RAZON y MENSAJE no se traducen.
+            Current branch: $branch. If the branch name contains a ticket ID (e.g. ABC-123), include it in the title.
 
-        Responde EXACTAMENTE con este formato, sin bloques de código:
-        TIPO: <tipo>
-        RAZON: <una frase explicando por qué es ese tipo>
-        MENSAJE:
-        <tipo>(<scope opcional>): <título en imperativo, máx. 72 caracteres>
+            Write the reason, the title and the body in $language. The TYPE, REASON and MESSAGE labels are not translated.
+        """.trimIndent()
 
-        <cuerpo opcional con viñetas breves, solo si aporta>
-    """.trimIndent()
+        val format = """
+            Reply EXACTLY in this format, without code blocks:
+            TYPE: <type>
+            REASON: <one sentence explaining why it is that type>
+            MESSAGE:
+            <type>(<optional scope>): <title in the imperative mood, max. 72 characters>
 
-    fun suggest(diff: String, branch: String, indicator: ProgressIndicator): CommitSuggestion {
+            <optional body with short bullet points, only if it adds value>
+        """.trimIndent()
+
+        return listOfNotNull(intro, styleSection(recentCommits, language), format).joinToString("\n\n")
+    }
+
+    /** Recent titles of the repo so Claude can match its style; null if there are none. */
+    internal fun styleSection(recentCommits: List<String>, language: String): String? {
+        if (recentCommits.isEmpty()) return null
+        return "Titles of the latest commits in the repository, newest first. Match their style " +
+            "(scopes in use, capitalization, length, ticket ID format), but always write in $language " +
+            "and follow the requested Conventional Commits format. They are only a reference: do not copy their content.\n" +
+            recentCommits.joinToString("\n") { "- $it" }
+    }
+
+    /** Turns the output of `git log --format=%s` into a clean list of titles. */
+    internal fun parseRecentCommits(gitLogOutput: String): List<String> =
+        gitLogOutput.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { if (it.length > MAX_SUBJECT_CHARS) it.take(MAX_SUBJECT_CHARS) + "…" else it }
+            .take(RECENT_COMMITS)
+            .toList()
+
+    fun suggest(diff: String, branch: String, recentCommits: List<String>, indicator: ProgressIndicator): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
         val shell = System.getenv("SHELL")?.takeIf { it.isNotBlank() } ?: "/bin/zsh"
-        // IntelliJ abierto desde el Dock no hereda el PATH de la terminal: lo completamos.
-        // El modelo va por variable de entorno para no interpolar texto del usuario en el script. Se añade con
-        // `set --` porque zsh no divide `${VAR:+--model "$VAR"}` en dos argumentos.
-        // --tools "": para clasificar el diff no necesita leer archivos ni ejecutar nada.
-        // --no-session-persistence: no deja una sesión en el historial por cada commit.
+        // IntelliJ launched from the Dock doesn't inherit the terminal's PATH, so we extend it.
+        // The model is passed via an environment variable to avoid interpolating user text into the script. It is
+        // added with `set --` because zsh doesn't split `${VAR:+--model "$VAR"}` into two arguments.
+        // --tools "": classifying the diff doesn't require reading files or running anything.
+        // --no-session-persistence: doesn't leave a session in the history for every commit.
         val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
             "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
             "claude -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
@@ -53,7 +82,7 @@ object ClaudeClient {
             dir = neutralDir(),
             stdin = diff,
             env = mapOf(
-                "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language),
+                "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language, recentCommits),
                 "CLAUDE_COMMIT_MODEL" to settings.model,
             ),
             timeoutSec = settings.timeoutSec,
@@ -64,27 +93,27 @@ object ClaudeClient {
         return CommitMessageParser.parse(res.stdout)
     }
 
-    /** Traduce un resultado fallido de la CLI a un mensaje accionable; null si fue bien. */
+    /** Turns a failed CLI result into an actionable message; null if it succeeded. */
     internal fun errorMessage(res: ShellResult): String? {
         val output = res.stderr + "\n" + res.stdout
         return when {
             res.exitCode == 127 || (res.exitCode != 0 && res.stderr.contains("command not found")) ->
-                "No se encontró la CLI 'claude'. Instala Claude Code y ejecuta 'claude' una vez para iniciar sesión."
+                "The 'claude' CLI was not found. Install Claude Code and run 'claude' once to log in."
             res.exitCode != 0 && LOGIN_ERRORS.any { output.contains(it, ignoreCase = true) } ->
-                "No has iniciado sesión en Claude Code o la sesión caducó. Abre una terminal, ejecuta 'claude' " +
-                    "y elige iniciar sesión con tu suscripción; luego vuelve a pulsar el botón."
+                "You are not logged in to Claude Code, or your session has expired. Open a terminal, run 'claude' " +
+                    "and log in with your subscription, then click the button again."
             res.exitCode != 0 || res.stdout.isBlank() ->
-                "Claude falló (código ${res.exitCode}): ${res.stderr.ifBlank { res.stdout }.take(500)}"
+                "Claude failed (exit code ${res.exitCode}): ${res.stderr.ifBlank { res.stdout }.take(500)}"
             else -> null
         }
     }
 
-    // Textos con los que la CLI indica que falta sesión o que caducó (p. ej. "Not logged in · Please run /login").
+    // Texts the CLI uses to report a missing or expired session (e.g. "Not logged in · Please run /login").
     private val LOGIN_ERRORS = listOf("not logged in", "please run /login", "invalid api key", "token has expired", "authentication_error")
 
     /**
-     * Directorio fuera del repo: dentro del proyecto la CLI cargaría su CLAUDE.md, hooks y servidores MCP,
-     * lo que la ralentiza y puede alterar el formato de la respuesta. Todo lo que necesita va en el diff y el prompt.
+     * Directory outside the repo: inside the project the CLI would load its CLAUDE.md, hooks and MCP servers,
+     * which slows it down and can change the response format. Everything it needs is in the diff and the prompt.
      */
     private fun neutralDir(): File = File(PathManager.getTempPath(), "claude-commit").apply { mkdirs() }
 }

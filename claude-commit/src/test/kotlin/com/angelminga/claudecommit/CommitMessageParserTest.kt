@@ -6,68 +6,76 @@ import org.junit.Test
 class CommitMessageParserTest {
 
     @Test
-    fun `formato esperado`() {
+    fun `expected format`() {
         val s = CommitMessageParser.parse(
             """
-            TIPO: feat
-            RAZON: Añade una funcionalidad nueva.
-            MENSAJE:
-            feat(login): agregar inicio de sesión con Google
+            TYPE: feat
+            REASON: Adds a new feature.
+            MESSAGE:
+            feat(login): add Google sign-in
 
-            - Nuevo botón en la pantalla de login
+            - New button on the login screen
             """.trimIndent()
         )
         assertEquals("feat", s.type)
-        assertEquals("Añade una funcionalidad nueva.", s.reason)
-        assertEquals("feat(login): agregar inicio de sesión con Google\n\n- Nuevo botón en la pantalla de login", s.message)
+        assertEquals("Adds a new feature.", s.reason)
+        assertEquals("feat(login): add Google sign-in\n\n- New button on the login screen", s.message)
     }
 
     @Test
-    fun `quita bloque de código con etiqueta de lenguaje`() {
-        val s = CommitMessageParser.parse("```text\nTIPO: fix\nRAZON: Corrige un bug.\nMENSAJE:\nfix: evitar NPE al guardar\n```")
+    fun `legacy Spanish labels are still accepted`() {
+        val s = CommitMessageParser.parse("TIPO: fix\nRAZÓN: Corrige un bug.\nMENSAJE:\nfix: evitar NPE al guardar")
         assertEquals("fix", s.type)
+        assertEquals("Corrige un bug.", s.reason)
         assertEquals("fix: evitar NPE al guardar", s.message)
     }
 
     @Test
-    fun `quita bloque de código sin etiqueta`() {
-        val s = CommitMessageParser.parse("```\nTIPO: docs\nRAZON: Solo README.\nMENSAJE:\ndocs: actualizar README\n```")
+    fun `strips code fence with language tag`() {
+        val s = CommitMessageParser.parse("```text\nTYPE: fix\nREASON: Fixes a bug.\nMESSAGE:\nfix: avoid NPE on save\n```")
+        assertEquals("fix", s.type)
+        assertEquals("fix: avoid NPE on save", s.message)
+    }
+
+    @Test
+    fun `strips code fence without tag`() {
+        val s = CommitMessageParser.parse("```\nTYPE: docs\nREASON: README only.\nMESSAGE:\ndocs: update README\n```")
         assertEquals("docs", s.type)
-        assertEquals("docs: actualizar README", s.message)
+        assertEquals("docs: update README", s.message)
     }
 
     @Test
-    fun `bloque de código solo alrededor del mensaje`() {
-        val s = CommitMessageParser.parse("TIPO: chore\nRAZON: Mantenimiento.\nMENSAJE:\n```\nchore: limpiar logs\n```")
-        assertEquals("chore: limpiar logs", s.message)
+    fun `code fence only around the message`() {
+        val s = CommitMessageParser.parse("TYPE: chore\nREASON: Maintenance.\nMESSAGE:\n```\nchore: clean up logs\n```")
+        assertEquals("chore: clean up logs", s.message)
     }
 
     @Test
-    fun `tipo y etiquetas sin distinguir mayúsculas`() {
-        val s = CommitMessageParser.parse("tipo: Refactor\nRazón: Reorganiza código.\nmensaje: refactor: extraer servicio")
+    fun `type and labels are case insensitive`() {
+        val s = CommitMessageParser.parse("type: Refactor\nReason: Reorganizes code.\nmessage: refactor: extract service")
         assertEquals("refactor", s.type)
-        assertEquals("Reorganiza código.", s.reason)
-        assertEquals("refactor: extraer servicio", s.message)
+        assertEquals("Reorganizes code.", s.reason)
+        assertEquals("refactor: extract service", s.message)
     }
 
     @Test
-    fun `sin formato deduce el tipo del título`() {
-        val s = CommitMessageParser.parse("perf(db)!: cachear consultas frecuentes")
+    fun `without format infers the type from the title`() {
+        val s = CommitMessageParser.parse("perf(db)!: cache frequent queries")
         assertEquals("perf", s.type)
         assertEquals("", s.reason)
-        assertEquals("perf(db)!: cachear consultas frecuentes", s.message)
+        assertEquals("perf(db)!: cache frequent queries", s.message)
     }
 
     @Test
-    fun `tipo no estándar`() {
-        val s = CommitMessageParser.parse("TIPO: feature\nRAZON: x\nMENSAJE:\nfeature: algo")
-        assertEquals("feature (no estándar)", s.type)
+    fun `non-standard type`() {
+        val s = CommitMessageParser.parse("TYPE: feature\nREASON: x\nMESSAGE:\nfeature: something")
+        assertEquals("feature (non-standard)", s.type)
     }
 
     @Test
-    fun `texto libre sin tipo`() {
-        val s = CommitMessageParser.parse("Actualicé varias cosas")
-        assertEquals("desconocido (no estándar)", s.type)
-        assertEquals("Actualicé varias cosas", s.message)
+    fun `free text without type`() {
+        val s = CommitMessageParser.parse("Updated several things")
+        assertEquals("unknown (non-standard)", s.type)
+        assertEquals("Updated several things", s.message)
     }
 }
