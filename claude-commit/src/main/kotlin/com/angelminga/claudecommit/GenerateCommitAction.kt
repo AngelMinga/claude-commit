@@ -14,6 +14,7 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.CommitMessageI
 import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
@@ -23,9 +24,10 @@ import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangesUtil
 import com.intellij.openapi.vcs.ui.CommitMessage
+import com.intellij.openapi.vcs.ui.Refreshable
 import com.intellij.ui.AnimatedIcon
-import com.intellij.vcs.commit.AbstractCommitWorkflowHandler
 import com.intellij.vcs.commit.CommitMessageUi
+import com.intellij.vcsUtil.VcsUtil
 import java.awt.Component
 import java.io.File
 import java.io.IOException
@@ -53,8 +55,9 @@ class GenerateCommitAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val messageControl = e.getData(VcsDataKeys.COMMIT_MESSAGE_CONTROL) ?: return
-        val handler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER) as? AbstractCommitWorkflowHandler<*, *>
-        generate(project, messageControl, handler, previousSuggestion = null)
+        // Public API for the commit panel (provided next to COMMIT_MESSAGE_CONTROL by the commit workflow).
+        val panel = e.getData(Refreshable.PANEL_KEY) as? CheckinProjectPanel
+        generate(project, messageControl, panel, previousSuggestion = null)
     }
 
     /**
@@ -64,18 +67,17 @@ class GenerateCommitAction : AnAction() {
     private fun generate(
         project: Project,
         messageControl: CommitMessageI,
-        handler: AbstractCommitWorkflowHandler<*, *>?,
+        panel: CheckinProjectPanel?,
         previousSuggestion: String?,
     ) {
         if (project.isDisposed || project.getUserData(RUNNING) == true) return
         val isRetry = previousSuggestion != null
 
-        val ui = handler?.ui
         // Without a commit panel we can't know what is checked, so we use the active changelist.
         // With a panel, we respect the selection.
-        val changes: List<Change> = ui?.getIncludedChanges()
+        val changes: List<Change> = panel?.selectedChanges?.toList()
             ?: ChangeListManager.getInstance(project).defaultChangeList.changes.toList()
-        val unversioned: List<FilePath> = ui?.getIncludedUnversionedFiles().orEmpty()
+        val unversioned: List<FilePath> = panel?.let { checkedUnversionedFiles(it, changes) }.orEmpty()
         if (changes.isEmpty() && unversioned.isEmpty()) {
             notify(project, ClaudeCommitBundle.message("notification.no.files"), NotificationType.WARNING)
             return
@@ -84,7 +86,7 @@ class GenerateCommitAction : AnAction() {
         // The diff is built from what is on disk, so save pending edits first.
         FileDocumentManager.getInstance().saveAllDocuments()
 
-        val messageUi = ui?.commitMessageUi ?: messageControl as? CommitMessageUi
+        val messageUi = messageControl as? CommitMessageUi
         // When overwriting without asking (or retrying, which asks for a replacement), clear the field right away so
         // it's clear the plugin is working. Keep the text to restore it if Claude fails or the task is cancelled.
         val replaceWithoutAsking = isRetry || ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking
@@ -96,7 +98,7 @@ class GenerateCommitAction : AnAction() {
         messageField?.setPlaceholder(ClaudeCommitBundle.message("progress.placeholder"))
         setRunning(project, true)
 
-        val retryWith = { retryFrom: String? -> retry(project, messageControl, handler, retryFrom) }
+        val retryWith = { retryFrom: String? -> retry(project, messageControl, panel, retryFrom) }
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, ClaudeCommitBundle.message("task.title"), true) {
             private var result: CommitSuggestion? = null
@@ -160,12 +162,21 @@ class GenerateCommitAction : AnAction() {
     }
 
     /** "Retry" from a notification: only possible while the commit panel that started the request is still open. */
-    private fun retry(project: Project, messageControl: CommitMessageI, handler: AbstractCommitWorkflowHandler<*, *>?, previousSuggestion: String?) {
+    private fun retry(project: Project, messageControl: CommitMessageI, panel: CheckinProjectPanel?, previousSuggestion: String?) {
         if ((messageControl as? Component)?.isShowing == false) {
             notify(project, ClaudeCommitBundle.message("notification.retry.unavailable"), NotificationType.WARNING)
             return
         }
-        generate(project, messageControl, handler, previousSuggestion)
+        generate(project, messageControl, panel, previousSuggestion)
+    }
+
+    /**
+     * Checked unversioned files. [CheckinProjectPanel.getVirtualFiles] returns every checked path (the files of the
+     * checked changes plus the checked unversioned files), so the unversioned ones are those without a change.
+     */
+    private fun checkedUnversionedFiles(panel: CheckinProjectPanel, changes: List<Change>): List<FilePath> {
+        val changedPaths = changes.mapTo(HashSet()) { ChangesUtil.getFilePath(it).path }
+        return panel.virtualFiles.filter { it.path !in changedPaths }.map { VcsUtil.getFilePath(it) }
     }
 
     /** Titles of the latest commits (no merges); empty if it isn't a git repo or has no commits yet. */

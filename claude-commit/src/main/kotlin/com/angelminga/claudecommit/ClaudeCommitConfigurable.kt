@@ -10,12 +10,14 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.rows
-import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 
 class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("settings.display.name")) {
 
     /** [value] is what gets stored (and passed to the CLI or the prompt); [label] is what the user sees. */
-    private data class Option(val value: String, val label: String)
+    private data class Option(val value: String, val label: String) {
+        // The combo box's default renderer shows toString().
+        override fun toString() = label
+    }
 
     private val settings get() = ClaudeCommitSettings.getInstance().state
 
@@ -38,7 +40,7 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
 
         return panel {
             row(ClaudeCommitBundle.message("settings.model")) {
-                comboBox(modelOptions, renderer())
+                comboBox(modelOptions)
                     .bindItem(
                         { modelOptions.firstOrNull { it.value == settings.model.orEmpty().trim() } ?: modelOptions.first() },
                         { settings.model = it?.value.orEmpty() },
@@ -46,7 +48,7 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
                     .comment(ClaudeCommitBundle.message("settings.model.comment"))
             }
             row(ClaudeCommitBundle.message("settings.language")) {
-                comboBox(languageOptions, renderer())
+                comboBox(languageOptions)
                     .bindItem(
                         {
                             val current = settings.language?.trim() ?: ClaudeCommitSettings.DEFAULT_LANGUAGE
@@ -96,6 +98,4 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
         val name = locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
         return ClaudeCommitBundle.message("settings.language.ide", name)
     }
-
-    private fun renderer() = textListCellRenderer<Option?>("") { it?.label }
 }
