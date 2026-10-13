@@ -12,7 +12,12 @@ object ClaudeClient {
     private const val MAX_SUBJECT_CHARS = 120
 
     // Multi-line variable parts are joined outside trimIndent so they don't break its indentation handling.
-    internal fun prompt(branch: String, language: String, recentCommits: List<String> = emptyList()): String {
+    internal fun prompt(
+        branch: String,
+        language: String,
+        recentCommits: List<String> = emptyList(),
+        alwaysIncludeScope: Boolean = false,
+    ): String {
         val intro = """
             Analyze the following diff and classify the change according to Conventional Commits.
 
@@ -34,17 +39,27 @@ object ClaudeClient {
             Write the reason, the title and the body in $language. The TYPE, REASON and MESSAGE labels are not translated.
         """.trimIndent()
 
+        val scope = if (alwaysIncludeScope) "<scope>" else "<optional scope>"
         val format = """
             Reply EXACTLY in this format, without code blocks:
             TYPE: <type>
             REASON: <one sentence explaining why it is that type>
             MESSAGE:
-            <type>(<optional scope>): <title in the imperative mood, max. 72 characters>
+            <type>($scope): <title in the imperative mood, max. 72 characters>
 
             <optional body with short bullet points, only if it adds value>
         """.trimIndent()
 
-        return listOfNotNull(intro, styleSection(recentCommits, language), format).joinToString("\n\n")
+        return listOfNotNull(intro, styleSection(recentCommits, language), scopeRule(alwaysIncludeScope), format)
+            .joinToString("\n\n")
+    }
+
+    /** Extra rule that makes the scope mandatory; null when the scope stays optional. */
+    internal fun scopeRule(alwaysIncludeScope: Boolean): String? {
+        if (!alwaysIncludeScope) return null
+        return "Always include a scope in the title: a short lowercase word naming the area of the code that changed " +
+            "(module, package, component or feature, e.g. settings, client, ui). Reuse a scope from the recent commits " +
+            "when one fits. This rule takes precedence over the style of recent commits."
     }
 
     /** Recent titles of the repo so Claude can match its style; null if there are none. */
@@ -82,7 +97,7 @@ object ClaudeClient {
             dir = neutralDir(),
             stdin = diff,
             env = mapOf(
-                "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language, recentCommits),
+                "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language, recentCommits, settings.state.alwaysIncludeScope),
                 "CLAUDE_COMMIT_MODEL" to settings.model,
             ),
             timeoutSec = settings.timeoutSec,

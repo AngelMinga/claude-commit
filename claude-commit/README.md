@@ -37,12 +37,13 @@ Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message
 *Settings → Tools → Commit Messages for Claude Code*:
 
 - **Model**: CLI default, Haiku (fastest), Sonnet or Opus.
-- **Message language**: English by default.
+- **Message language**: "Same as IDE" by default (commit messages follow the IDE language), or a fixed language that stays the same when you switch the IDE language.
 - **Timeout** in seconds.
 - **Match the style of recent commits**: sends the titles of the last 20 commits so Claude follows your scopes and conventions.
+- **Always include a scope**: titles always get a scope such as `feat(settings): …`, even if recent commits do not use one.
 - **Replace the existing message without asking**.
 
-The plugin UI is available in English and Spanish and follows the IDE language (Spanish requires a Spanish language pack from JetBrains Marketplace). The message language above is set independently.
+The plugin UI is available in English and Spanish and follows the IDE language (Spanish requires a Spanish language pack from JetBrains Marketplace). With "Same as IDE", commit messages switch language along with it.
 
 See [PRIVACY.md](../PRIVACY.md) for what is sent to Claude.
 

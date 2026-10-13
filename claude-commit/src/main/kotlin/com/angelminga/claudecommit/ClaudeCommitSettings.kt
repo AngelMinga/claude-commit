@@ -1,11 +1,13 @@
 package com.angelminga.claudecommit
 
+import com.intellij.DynamicBundle
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
+import java.util.Locale
 
 /** Global plugin settings (Settings → Tools → Commit Messages for Claude Code). */
 @Service(Service.Level.APP)
@@ -21,10 +23,13 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
         var overwriteWithoutAsking by property(false)
         /** Sends the titles of the latest commits so Claude can match the repo's style. */
         var imitateRepoStyle by property(true)
+        /** Makes the scope mandatory in the title (e.g. `feat(settings): …`). */
+        var alwaysIncludeScope by property(false)
     }
 
     val model: String get() = state.model?.trim().orEmpty()
-    val language: String get() = state.language?.trim()?.ifBlank { null } ?: DEFAULT_LANGUAGE
+    /** Language name to put in the prompt (e.g. "Spanish"); resolves [LANGUAGE_IDE] to the current IDE language. */
+    val language: String get() = resolveLanguage(state.language, DynamicBundle.getLocale())
     val timeoutSec: Long get() = state.timeoutSec.coerceIn(MIN_TIMEOUT_SEC, MAX_TIMEOUT_SEC).toLong()
 
     override fun loadState(state: Settings) {
@@ -36,7 +41,9 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
     companion object {
         /** Visible plugin name; must match `<name>`, the notification group and the configurable in plugin.xml. */
         const val PLUGIN_NAME = "Commit Messages for Claude Code"
-        const val DEFAULT_LANGUAGE = "English"
+        /** Stored language value meaning "use the IDE language". */
+        const val LANGUAGE_IDE = "IDE"
+        const val DEFAULT_LANGUAGE = LANGUAGE_IDE
         const val DEFAULT_TIMEOUT_SEC = 180
         const val MIN_TIMEOUT_SEC = 10
         const val MAX_TIMEOUT_SEC = 900
@@ -49,6 +56,15 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
             "alemán" to "German",
             "italiano" to "Italian",
         )
+
+        /** English name of the locale's language ("Spanish", "Japanese"…), as the prompt expects. */
+        internal fun languageName(locale: Locale): String =
+            locale.getDisplayLanguage(Locale.ENGLISH).ifBlank { "English" }
+
+        internal fun resolveLanguage(stored: String?, ideLocale: Locale): String {
+            val value = stored?.trim()?.ifBlank { null } ?: DEFAULT_LANGUAGE
+            return if (value == LANGUAGE_IDE) languageName(ideLocale) else value
+        }
 
         fun getInstance(): ClaudeCommitSettings = service()
     }

@@ -35,6 +35,24 @@ class ClaudeClientPromptTest {
     }
 
     @Test
+    fun `scope is optional by default`() {
+        val prompt = ClaudeClient.prompt("main", "English", listOf("feat: something"))
+        assertTrue(prompt.contains("<type>(<optional scope>):"))
+        assertFalse(prompt.contains("Always include a scope"))
+    }
+
+    @Test
+    fun `always include scope makes it mandatory and overrides the style`() {
+        val prompt = ClaudeClient.prompt("main", "English", listOf("feat: something"), alwaysIncludeScope = true)
+        assertTrue(prompt.contains("<type>(<scope>):"))
+        assertFalse(prompt.contains("<optional scope>"))
+        val rule = prompt.indexOf("Always include a scope")
+        assertTrue(rule > prompt.indexOf(styleHeader))
+        assertTrue(rule < prompt.indexOf("Reply EXACTLY"))
+        assertTrue(prompt.contains("takes precedence over the style of recent commits"))
+    }
+
+    @Test
     fun `git log parsing drops blanks, truncates and limits`() {
         val output = "  feat: one  \n\n" + "x".repeat(200) + "\n" + (1..30).joinToString("\n") { "fix: $it" }
         val commits = ClaudeClient.parseRecentCommits(output)

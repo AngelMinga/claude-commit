@@ -1,5 +1,6 @@
 package com.angelminga.claudecommit
 
+import com.intellij.DynamicBundle
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.bindIntText
@@ -23,8 +24,10 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
     )
 
     // The stored value stays in English because it is inserted into the (English) prompt; only the label is localized.
-    private val languages = listOf("English", "Spanish", "Portuguese", "French", "German", "Italian")
-        .map { Option(it, ClaudeCommitBundle.message("settings.language.$it")) }
+    // The first option follows the IDE language; its label shows which language that currently is.
+    private val languages = listOf(Option(ClaudeCommitSettings.LANGUAGE_IDE, ideLanguageLabel())) +
+        listOf("English", "Spanish", "Portuguese", "French", "German", "Italian")
+            .map { Option(it, ClaudeCommitBundle.message("settings.language.$it")) }
 
     override fun createPanel(): DialogPanel {
         val modelOptions = withCurrent(models, settings.model.orEmpty().trim())
@@ -59,6 +62,11 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
                     .comment(ClaudeCommitBundle.message("settings.imitate.comment", ClaudeClient.RECENT_COMMITS))
             }
             row {
+                checkBox(ClaudeCommitBundle.message("settings.scope"))
+                    .bindSelected({ settings.alwaysIncludeScope }, { settings.alwaysIncludeScope = it })
+                    .comment(ClaudeCommitBundle.message("settings.scope.comment"))
+            }
+            row {
                 checkBox(ClaudeCommitBundle.message("settings.overwrite"))
                     .bindSelected({ settings.overwriteWithoutAsking }, { settings.overwriteWithoutAsking = it })
             }
@@ -68,6 +76,13 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
     /** Keeps a stored value that isn't in the list (e.g. a model typed by hand in older versions). */
     private fun withCurrent(options: List<Option>, current: String): List<Option> =
         if (current.isEmpty() || options.any { it.value == current }) options else options + Option(current, current)
+
+    /** "Same as IDE (English)", with the language name written in the IDE language. */
+    private fun ideLanguageLabel(): String {
+        val locale = DynamicBundle.getLocale()
+        val name = locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
+        return ClaudeCommitBundle.message("settings.language.ide", name)
+    }
 
     private fun renderer() = textListCellRenderer<Option?>("") { it?.label }
 }
