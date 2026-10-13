@@ -1,6 +1,6 @@
 # Privacy Policy — Commit Messages for Claude Code
 
-_Last updated: October 12, 2026 (version 1.3.0)_
+_Last updated: October 12, 2026 (version 1.8.0)_
 
 Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that generates commit messages using the Claude Code CLI installed on your computer. This page explains what data the plugin handles and where it goes.
 
@@ -12,7 +12,7 @@ Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that ge
 
 ## What data is sent, and when
 
-Data is only processed when you click **Generate Commit Message with Claude** in the commit panel. Nothing is sent in the background.
+Data is only processed when you click **Generate Commit Message with Claude** in the commit panel or **Retry** in its notification. Nothing is sent in the background.
 
 On each click, the plugin builds the following and passes it to the local `claude` CLI:
 
@@ -20,6 +20,8 @@ On each click, the plugin builds the following and passes it to the local `claud
 - the file paths and their change status (new, modified, deleted, moved);
 - the name of the current Git branch;
 - the titles (first line only) of the last 20 commits of the repository, so Claude can match their style. You can turn this off in _Settings → Tools → Commit Messages for Claude Code_ ("Match the style of recent commits in the repository");
+- the additional instructions you typed in the settings, if any;
+- when you click **Retry**, the previous suggestion, so Claude can write a different one;
 - the instructions (prompt) that ask Claude to write the message, including the language you selected.
 
 ## Who receives it
@@ -38,7 +40,7 @@ To limit what is shared, the plugin runs the CLI with:
 
 ## What is stored on your computer
 
-The plugin only stores its settings (model, message language, timeout, the "match recent commits style" option and the "overwrite without asking" option) in your IDE configuration, in `claudeCommit.xml`. They never leave your computer.
+The plugin only stores its settings (model, message language, timeout, the "match recent commits style", "always include a scope" and "overwrite without asking" options, and your additional instructions) in your IDE configuration, in `claudeCommit.xml`. They are not sent anywhere, except the additional instructions, which are included in the prompt as described above.
 
 ## Changes and contact
 

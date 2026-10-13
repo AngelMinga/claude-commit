@@ -3,10 +3,13 @@ package com.angelminga.claudecommit
 import com.intellij.DynamicBundle
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
+import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.rows
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 
 class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("settings.display.name")) {
@@ -65,6 +68,16 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
                 checkBox(ClaudeCommitBundle.message("settings.scope"))
                     .bindSelected({ settings.alwaysIncludeScope }, { settings.alwaysIncludeScope = it })
                     .comment(ClaudeCommitBundle.message("settings.scope.comment"))
+            }
+            row(ClaudeCommitBundle.message("settings.extra")) {
+                textArea()
+                    .rows(3)
+                    .align(AlignX.FILL)
+                    .bindText(
+                        { settings.extraInstructions.orEmpty() },
+                        { settings.extraInstructions = it.trim().take(ClaudeCommitSettings.MAX_EXTRA_INSTRUCTIONS) },
+                    )
+                    .comment(ClaudeCommitBundle.message("settings.extra.comment"))
             }
             row {
                 checkBox(ClaudeCommitBundle.message("settings.overwrite"))

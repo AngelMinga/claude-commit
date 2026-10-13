@@ -53,6 +53,30 @@ class ClaudeClientPromptTest {
     }
 
     @Test
+    fun `no extra instructions or retry section by default`() {
+        val prompt = ClaudeClient.prompt("main", "English")
+        assertFalse(prompt.contains("Additional instructions from the user"))
+        assertFalse(prompt.contains("rejected this previous suggestion"))
+    }
+
+    @Test
+    fun `extra instructions go before the reply format`() {
+        val prompt = ClaudeClient.prompt("main", "English", extraInstructions = "  Explain why in the body.  ")
+        val extra = prompt.indexOf("Additional instructions from the user")
+        assertTrue(extra in 0 until prompt.indexOf("Reply EXACTLY"))
+        assertTrue(prompt.contains("\nExplain why in the body.\n"))
+    }
+
+    @Test
+    fun `retry includes the rejected suggestion and asks for a different one`() {
+        val prompt = ClaudeClient.prompt("main", "English", previousSuggestion = "feat(ui): add button\n\n- Detail")
+        val retry = prompt.indexOf("rejected this previous suggestion")
+        assertTrue(retry in 0 until prompt.indexOf("Reply EXACTLY"))
+        assertTrue(prompt.contains("different wording"))
+        assertTrue(prompt.contains("\nfeat(ui): add button\n\n- Detail\n"))
+    }
+
+    @Test
     fun `git log parsing drops blanks, truncates and limits`() {
         val output = "  feat: one  \n\n" + "x".repeat(200) + "\n" + (1..30).joinToString("\n") { "fix: $it" }
         val commits = ClaudeClient.parseRecentCommits(output)

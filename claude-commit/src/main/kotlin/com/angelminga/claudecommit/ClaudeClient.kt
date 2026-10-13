@@ -19,6 +19,8 @@ object ClaudeClient {
         language: String,
         recentCommits: List<String> = emptyList(),
         alwaysIncludeScope: Boolean = false,
+        extraInstructions: String = "",
+        previousSuggestion: String? = null,
     ): String {
         val intro = """
             Analyze the following diff and classify the change according to Conventional Commits.
@@ -52,8 +54,28 @@ object ClaudeClient {
             <optional body with short bullet points, only if it adds value>
         """.trimIndent()
 
-        return listOfNotNull(intro, styleSection(recentCommits, language), scopeRule(alwaysIncludeScope), format)
-            .joinToString("\n\n")
+        return listOfNotNull(
+            intro,
+            styleSection(recentCommits, language),
+            scopeRule(alwaysIncludeScope),
+            extraInstructionsSection(extraInstructions),
+            retrySection(previousSuggestion),
+            format,
+        ).joinToString("\n\n")
+    }
+
+    /** The user's own instructions from the settings; null if there are none. */
+    internal fun extraInstructionsSection(extraInstructions: String): String? {
+        if (extraInstructions.isBlank()) return null
+        return "Additional instructions from the user (follow them unless they conflict with the reply format below):\n" +
+            extraInstructions.trim()
+    }
+
+    /** Asks for a different message when the user clicked "Retry"; null on the first attempt. */
+    internal fun retrySection(previousSuggestion: String?): String? {
+        if (previousSuggestion.isNullOrBlank()) return null
+        return "The user rejected this previous suggestion and wants a different one. Write a new message with " +
+            "different wording; change the type or scope only if a better one fits.\n" + previousSuggestion.trim()
     }
 
     /** Extra rule that makes the scope mandatory; null when the scope stays optional. */
@@ -82,9 +104,22 @@ object ClaudeClient {
             .take(RECENT_COMMITS)
             .toList()
 
-    fun suggest(diff: String, branch: String, recentCommits: List<String>, indicator: ProgressIndicator): CommitSuggestion {
+    fun suggest(
+        diff: String,
+        branch: String,
+        recentCommits: List<String>,
+        previousSuggestion: String?,
+        indicator: ProgressIndicator,
+    ): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
-        val prompt = prompt(branch, settings.language, recentCommits, settings.state.alwaysIncludeScope)
+        val prompt = prompt(
+            branch,
+            settings.language,
+            recentCommits,
+            settings.state.alwaysIncludeScope,
+            settings.extraInstructions,
+            previousSuggestion,
+        )
         val invocation = if (SystemInfo.isWindows) {
             val claude = findWindowsClaude(System.getenv()) { File(it).isFile }
                 ?: throw IllegalStateException(ClaudeCommitBundle.message("error.cli.not.found"))

@@ -29,7 +29,7 @@ From a file: *Settings → Plugins → ⚙ → Install Plugin from Disk…* → 
 1. Open the commit panel (`⌘K`).
 2. Check the files to commit.
 3. Click **Generate Commit Message with Claude** next to *Amend*.
-4. Review the message and commit.
+4. Review the message and commit. Not happy with it? Click **Retry** in the notification to get a different one.
 
 Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message with Claude".
 
@@ -42,6 +42,7 @@ Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message
 - **Timeout** in seconds.
 - **Match the style of recent commits**: sends the titles of the last 20 commits so Claude follows your scopes and conventions.
 - **Always include a scope**: titles always get a scope such as `feat(settings): …`, even if recent commits do not use one.
+- **Additional instructions**: free text added to the prompt, e.g. "Explain why in the body" or "Put the ticket ID at the end".
 - **Replace the existing message without asking**.
 
 The plugin UI is available in English and Spanish and follows the IDE language (Spanish requires a Spanish language pack from JetBrains Marketplace). With "Same as IDE", commit messages switch language along with it.

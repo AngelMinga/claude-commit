@@ -19,13 +19,22 @@
     <p><b>Requirements:</b> macOS or Linux (Windows support is experimental), and the <code>claude</code> CLI installed and logged in. It uses your Claude
     subscription; no API key is needed. Not affiliated with Anthropic.</p>
 
+    <p>Not happy with the message? Click <b>Retry</b> in the notification to get a different one.</p>
+
     <p><b>Settings</b> (<i>Settings → Tools → Commit Messages for Claude Code</i>): model (Haiku, Sonnet, Opus), message
-    language, timeout, matching the style of recent commits, always including a scope, and whether to overwrite an existing message without asking.</p>
+    language, timeout, matching the style of recent commits, always including a scope, additional instructions, and whether to overwrite an existing message without asking.</p>
 
     <p>The plugin UI is available in English and Spanish and follows the IDE language.</p>
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.9.0</h3>
+    <ul><li>Progress feedback while Claude works: the message field shows "Claude is generating the commit message…" and the button shows a spinner.</li></ul>
+    <h3>1.8.0</h3>
+    <ul>
+      <li><b>Retry</b> button in the notification: asks Claude for a different message (or repeats the request after an error).</li>
+      <li>New setting "Additional instructions": your own rules added to the prompt, e.g. "Explain why in the body".</li>
+    </ul>
     <h3>1.7.0</h3>
     <ul>
       <li>Experimental Windows support: finds <code>claude.exe</code> or npm's <code>claude.cmd</code> in PATH and the default install locations.</li>

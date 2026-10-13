@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.angelminga"
-version = "1.7.0"
+version = "1.9.0"
 
 repositories {
     mavenCentral()

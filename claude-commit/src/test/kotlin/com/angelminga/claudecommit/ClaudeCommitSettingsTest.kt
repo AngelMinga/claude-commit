@@ -32,6 +32,15 @@ class ClaudeCommitSettingsTest {
     }
 
     @Test
+    fun `extra instructions are trimmed and capped`() {
+        val settings = ClaudeCommitSettings().apply {
+            loadState(ClaudeCommitSettings.Settings().also { it.extraInstructions = "  " + "x".repeat(1500) + "  " })
+        }
+        assertEquals(ClaudeCommitSettings.MAX_EXTRA_INSTRUCTIONS, settings.extraInstructions.length)
+        assertEquals("", ClaudeCommitSettings().extraInstructions)
+    }
+
+    @Test
     fun `legacy Spanish language names are migrated`() {
         assertEquals("Spanish", loaded("español"))
         assertEquals("English", loaded("inglés"))

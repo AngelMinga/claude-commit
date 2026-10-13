@@ -25,11 +25,14 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
         var imitateRepoStyle by property(true)
         /** Makes the scope mandatory in the title (e.g. `feat(settings): …`). */
         var alwaysIncludeScope by property(false)
+        /** Free text appended to the prompt (e.g. "Explain why in the body"). */
+        var extraInstructions by string("")
     }
 
     val model: String get() = state.model?.trim().orEmpty()
     /** Language name to put in the prompt (e.g. "Spanish"); resolves [LANGUAGE_IDE] to the current IDE language. */
     val language: String get() = resolveLanguage(state.language, DynamicBundle.getLocale())
+    val extraInstructions: String get() = state.extraInstructions.orEmpty().trim().take(MAX_EXTRA_INSTRUCTIONS)
     val timeoutSec: Long get() = state.timeoutSec.coerceIn(MIN_TIMEOUT_SEC, MAX_TIMEOUT_SEC).toLong()
 
     override fun loadState(state: Settings) {
@@ -47,6 +50,7 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
         const val DEFAULT_TIMEOUT_SEC = 180
         const val MIN_TIMEOUT_SEC = 10
         const val MAX_TIMEOUT_SEC = 900
+        const val MAX_EXTRA_INSTRUCTIONS = 1000
 
         internal val LEGACY_LANGUAGES = mapOf(
             "español" to "Spanish",
