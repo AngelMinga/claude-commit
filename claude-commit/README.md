@@ -42,6 +42,8 @@ Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message
 - **Match the style of recent commits**: sends the titles of the last 20 commits so Claude follows your scopes and conventions.
 - **Replace the existing message without asking**.
 
+The plugin UI is available in English and Spanish and follows the IDE language (Spanish requires a Spanish language pack from JetBrains Marketplace). The message language above is set independently.
+
 See [PRIVACY.md](../PRIVACY.md) for what is sent to Claude.
 
 ## Build

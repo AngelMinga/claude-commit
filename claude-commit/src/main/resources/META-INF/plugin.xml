@@ -21,9 +21,13 @@
 
     <p><b>Settings</b> (<i>Settings → Tools → Commit Messages for Claude Code</i>): model (Haiku, Sonnet, Opus), message
     language, timeout, matching the style of recent commits, and whether to overwrite an existing message without asking.</p>
+
+    <p>The plugin UI is available in English and Spanish and follows the IDE language.</p>
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.4.0</h3>
+    <ul><li>The plugin UI follows the IDE language: English, or Spanish when the IDE runs with a Spanish language pack.</li></ul>
     <h3>1.3.0</h3>
     <ul>
       <li>The whole plugin is now in English: button, settings, notifications and dialogs.</li>
@@ -56,23 +60,25 @@
     </ul>
     ]]></change-notes>
 
+    <resource-bundle>messages.ClaudeCommitBundle</resource-bundle>
+
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.vcs</depends>
     <depends optional="true" config-file="claudeCommit-platformVcs.xml">com.intellij.platform.vcs</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="Commit Messages for Claude Code" displayType="BALLOON"/>
+        <notificationGroup id="Commit Messages for Claude Code" displayType="BALLOON"
+                           bundle="messages.ClaudeCommitBundle" key="notification.group.name"/>
         <applicationConfigurable parentId="tools"
                                  instance="com.angelminga.claudecommit.ClaudeCommitConfigurable"
                                  id="com.angelminga.claudecommit.settings"
-                                 displayName="Commit Messages for Claude Code"/>
+                                 bundle="messages.ClaudeCommitBundle"
+                                 key="settings.display.name"/>
     </extensions>
 
     <actions>
         <action id="ClaudeCommit.Generate"
                 class="com.angelminga.claudecommit.GenerateCommitAction"
-                text="Generate Commit Message with Claude"
-                description="Detects the change type (feat, fix…) and generates the commit message"
                 icon="/icons/claudeCommit.svg">
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
         </action>

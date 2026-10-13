@@ -47,7 +47,7 @@ object Shell {
             }
             if (System.currentTimeMillis() > deadline) {
                 process.destroyForcibly()
-                throw IllegalStateException("Timed out after ${timeoutSec}s running: ${command.first()}")
+                throw IllegalStateException(ClaudeCommitBundle.message("error.timeout", timeoutSec, command.first()))
             }
         }
         return ShellResult(process.exitValue(), out.get(), err.get())

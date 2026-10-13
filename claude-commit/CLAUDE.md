@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What it is
 
-A JetBrains IDE plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that adds a button to the commit panel: it sends the diff of the checked files to the `claude -p` CLI (subscription, no API key) and fills in a Conventional Commits message. **All user-facing text, the prompt, code comments and documentation are in English**; keep new code consistent. The only Spanish left on purpose is backward compatibility: legacy labels accepted by `CommitMessageParser` and `ClaudeCommitSettings.LEGACY_LANGUAGES`.
+A JetBrains IDE plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that adds a button to the commit panel: it sends the diff of the checked files to the `claude -p` CLI (subscription, no API key) and fills in a Conventional Commits message. **The prompt, code comments and documentation are in English**; keep new code consistent. **User-facing text is localized**: never hardcode it, add a key to `messages/ClaudeCommitBundle.properties` (English, default) **and** `ClaudeCommitBundle_es.properties` (Spanish), and read it with `ClaudeCommitBundle.message(...)` (or `bundle`/`key` attributes in `plugin.xml`). The platform picks the file matching the IDE language (Spanish requires a Spanish language pack). Texts with `{0}` go through `MessageFormat`, so use double quotes instead of apostrophes there. Other Spanish left on purpose is backward compatibility: legacy labels accepted by `CommitMessageParser` and `ClaudeCommitSettings.LEGACY_LANGUAGES`.
 
 ## Structure
 
@@ -20,9 +20,11 @@ claude-commit/
     │   ├── ClaudeClient.kt              # prompt + running `claude -p` + CLI error messages
     │   ├── CommitMessageParser.kt       # Claude's reply → CommitSuggestion (no IntelliJ deps)
     │   ├── Shell.kt                     # process execution with timeout and cancellation
+    │   ├── ClaudeCommitBundle.kt        # DynamicBundle for UI texts
     │   ├── ClaudeCommitSettings.kt      # persistent state (model, language, timeout, style, overwrite)
     │   └── ClaudeCommitConfigurable.kt  # UI for Settings → Tools → Commit Messages for Claude Code
     ├── main/resources/
+    │   ├── messages/ClaudeCommitBundle.properties / _es.properties  # UI texts (English default, Spanish)
     │   ├── META-INF/plugin.xml                    # id, dependencies, action, notifications, settings, description, change notes
     │   ├── META-INF/claudeCommit-platformVcs.xml  # empty descriptor for the optional dependency (see below)
     │   ├── META-INF/pluginIcon.svg / pluginIcon_dark.svg  # 40×40 icon for the plugin list (light/dark)
@@ -31,6 +33,7 @@ claude-commit/
         ├── CommitMessageParserTest.kt
         ├── ClaudeClientErrorTest.kt     # CLI error messages (not logged in, not installed…)
         ├── ClaudeClientPromptTest.kt    # prompt, style section and git log parsing
+        ├── ClaudeCommitBundleTest.kt    # English and Spanish bundles have the same keys and placeholders
         ├── ClaudeCommitSettingsTest.kt  # default language and migration of legacy Spanish values
         └── ShellTest.kt                 # large stdin, Broken pipe, timeout
 ```

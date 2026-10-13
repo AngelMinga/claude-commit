@@ -1,5 +1,6 @@
 package com.angelminga.claudecommit
 
+/** [type] is the raw type Claude returned (may be non-standard), or empty if none could be found. */
 data class CommitSuggestion(val type: String, val reason: String, val message: String)
 
 /**
@@ -29,12 +30,8 @@ object CommitMessageParser {
         val finalMessage = message?.takeIf { it.isNotBlank() } ?: text
         val finalType = type
             ?: Regex("""^([a-z]+)(\(.*?\))?!?:""").find(finalMessage)?.groupValues?.get(1)
-            ?: "unknown"
+            ?: ""
 
-        return CommitSuggestion(
-            type = if (finalType in TYPES) finalType else "$finalType (non-standard)",
-            reason = reason,
-            message = finalMessage,
-        )
+        return CommitSuggestion(type = finalType, reason = reason, message = finalMessage)
     }
 }

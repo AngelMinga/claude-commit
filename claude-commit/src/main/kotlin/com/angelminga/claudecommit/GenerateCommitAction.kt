@@ -55,7 +55,7 @@ class GenerateCommitAction : AnAction() {
             ?: ChangeListManager.getInstance(project).defaultChangeList.changes.toList()
         val unversioned: List<FilePath> = ui?.getIncludedUnversionedFiles().orEmpty()
         if (changes.isEmpty() && unversioned.isEmpty()) {
-            notify(project, "Check at least one file to commit.", NotificationType.WARNING)
+            notify(project, ClaudeCommitBundle.message("notification.no.files"), NotificationType.WARNING)
             return
         }
 
@@ -71,14 +71,14 @@ class GenerateCommitAction : AnAction() {
         if (clearedUpfront) commitMessage.setCommitMessage("")
         project.putUserData(RUNNING, true)
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Claude is analyzing your changes…", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, ClaudeCommitBundle.message("task.title"), true) {
             private var result: CommitSuggestion? = null
 
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
-                indicator.text = "Preparing diff…"
+                indicator.text = ClaudeCommitBundle.message("task.preparing.diff")
                 val diff = DiffCollector.collect(project, changes, unversioned)
-                if (diff.isBlank()) throw IllegalStateException("Could not build the diff of the changes.")
+                if (diff.isBlank()) throw IllegalStateException(ClaudeCommitBundle.message("error.empty.diff"))
 
                 val repoRoot = firstRoot(project, changes, unversioned)
                 val branch = git(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")?.trim().orEmpty()
@@ -89,7 +89,7 @@ class GenerateCommitAction : AnAction() {
                     emptyList()
                 }
 
-                indicator.text = "Asking Claude…"
+                indicator.text = ClaudeCommitBundle.message("task.asking.claude")
                 result = ClaudeClient.suggest(diff, branch, recentCommits, indicator)
             }
 
@@ -98,7 +98,7 @@ class GenerateCommitAction : AnAction() {
                 if (!confirmOverwrite(project, messageUi?.text)) return
                 commitMessage.setCommitMessage(s.message)
                 val detail = buildString {
-                    append("<b>Detected type: ${s.type}</b>")
+                    append("<b>${escape(ClaudeCommitBundle.message("notification.detected.type", typeLabel(s.type)))}</b>")
                     if (s.reason.isNotBlank()) append("<br/>${escape(s.reason)}")
                 }
                 notify(project, detail, NotificationType.INFORMATION)
@@ -139,10 +139,16 @@ class GenerateCommitAction : AnAction() {
 
     private fun confirmOverwrite(project: Project, current: String?): Boolean {
         if (current.isNullOrBlank() || ClaudeCommitSettings.getInstance().state.overwriteWithoutAsking) return true
-        return MessageDialogBuilder.yesNo(ClaudeCommitSettings.PLUGIN_NAME, "There is already a commit message. Replace it with the generated one?")
-            .yesText("Replace")
-            .noText("Keep")
+        return MessageDialogBuilder.yesNo(ClaudeCommitSettings.PLUGIN_NAME, ClaudeCommitBundle.message("dialog.overwrite.message"))
+            .yesText(ClaudeCommitBundle.message("dialog.overwrite.replace"))
+            .noText(ClaudeCommitBundle.message("dialog.overwrite.keep"))
             .ask(project)
+    }
+
+    private fun typeLabel(type: String): String = when {
+        type.isBlank() -> ClaudeCommitBundle.message("notification.type.unknown")
+        type in CommitMessageParser.TYPES -> type
+        else -> ClaudeCommitBundle.message("notification.type.nonstandard", type)
     }
 
     private fun firstRoot(project: Project, changes: List<Change>, unversioned: List<FilePath>): File {

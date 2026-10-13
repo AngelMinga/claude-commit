@@ -69,13 +69,13 @@ class CommitMessageParserTest {
     @Test
     fun `non-standard type`() {
         val s = CommitMessageParser.parse("TYPE: feature\nREASON: x\nMESSAGE:\nfeature: something")
-        assertEquals("feature (non-standard)", s.type)
+        assertEquals("feature", s.type)
     }
 
     @Test
     fun `free text without type`() {
         val s = CommitMessageParser.parse("Updated several things")
-        assertEquals("unknown (non-standard)", s.type)
+        assertEquals("", s.type)
         assertEquals("Updated several things", s.message)
     }
 }

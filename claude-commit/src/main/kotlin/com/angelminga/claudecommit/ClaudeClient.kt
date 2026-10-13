@@ -93,17 +93,16 @@ object ClaudeClient {
         return CommitMessageParser.parse(res.stdout)
     }
 
-    /** Turns a failed CLI result into an actionable message; null if it succeeded. */
+    /** Turns a failed CLI result into an actionable, localized message; null if it succeeded. */
     internal fun errorMessage(res: ShellResult): String? {
         val output = res.stderr + "\n" + res.stdout
         return when {
             res.exitCode == 127 || (res.exitCode != 0 && res.stderr.contains("command not found")) ->
-                "The 'claude' CLI was not found. Install Claude Code and run 'claude' once to log in."
+                ClaudeCommitBundle.message("error.cli.not.found")
             res.exitCode != 0 && LOGIN_ERRORS.any { output.contains(it, ignoreCase = true) } ->
-                "You are not logged in to Claude Code, or your session has expired. Open a terminal, run 'claude' " +
-                    "and log in with your subscription, then click the button again."
+                ClaudeCommitBundle.message("error.not.logged.in")
             res.exitCode != 0 || res.stdout.isBlank() ->
-                "Claude failed (exit code ${res.exitCode}): ${res.stderr.ifBlank { res.stdout }.take(500)}"
+                ClaudeCommitBundle.message("error.cli.failed", res.exitCode, res.stderr.ifBlank { res.stdout }.take(500))
             else -> null
         }
     }

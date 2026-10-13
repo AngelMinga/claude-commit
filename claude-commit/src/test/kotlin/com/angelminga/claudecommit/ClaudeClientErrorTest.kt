@@ -37,7 +37,7 @@ class ClaudeClientErrorTest {
     @Test
     fun `CLI not installed`() {
         val msg = error(127, stderr = "zsh:1: command not found: claude")!!
-        assertTrue(msg, msg.startsWith("The 'claude' CLI was not found"))
+        assertTrue(msg, msg.startsWith("The \"claude\" CLI was not found"))
     }
 
     @Test
