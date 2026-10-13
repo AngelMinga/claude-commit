@@ -2,7 +2,9 @@ package com.angelminga.claudecommit
 
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.util.SystemInfo
 import java.io.File
+import java.io.IOException
 
 /** Calls the `claude -p` CLI (uses your subscription's session, no API key needed). */
 object ClaudeClient {
@@ -82,37 +84,95 @@ object ClaudeClient {
 
     fun suggest(diff: String, branch: String, recentCommits: List<String>, indicator: ProgressIndicator): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
-        val shell = System.getenv("SHELL")?.takeIf { it.isNotBlank() } ?: "/bin/zsh"
-        // IntelliJ launched from the Dock doesn't inherit the terminal's PATH, so we extend it.
-        // The model is passed via an environment variable to avoid interpolating user text into the script. It is
-        // added with `set --` because zsh doesn't split `${VAR:+--model "$VAR"}` into two arguments.
-        // --tools "": classifying the diff doesn't require reading files or running anything.
-        // --no-session-persistence: doesn't leave a session in the history for every commit.
-        val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
-            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
-            "claude -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
+        val prompt = prompt(branch, settings.language, recentCommits, settings.state.alwaysIncludeScope)
+        val invocation = if (SystemInfo.isWindows) {
+            val claude = findWindowsClaude(System.getenv()) { File(it).isFile }
+                ?: throw IllegalStateException(ClaudeCommitBundle.message("error.cli.not.found"))
+            windowsInvocation(claude, prompt, diff, settings.model)
+        } else {
+            unixInvocation(defaultShell(), prompt, diff, settings.model)
+        }
 
-        val res = Shell.run(
-            command = listOf(shell, "-l", "-c", script),
-            dir = neutralDir(),
-            stdin = diff,
-            env = mapOf(
-                "CLAUDE_COMMIT_PROMPT" to prompt(branch, settings.language, recentCommits, settings.state.alwaysIncludeScope),
-                "CLAUDE_COMMIT_MODEL" to settings.model,
-            ),
-            timeoutSec = settings.timeoutSec,
-            indicator = indicator,
-        )
+        val res = try {
+            Shell.run(invocation.command, neutralDir(), invocation.stdin, invocation.env, settings.timeoutSec, indicator)
+        } catch (e: IOException) {
+            throw IllegalStateException(ClaudeCommitBundle.message("error.cli.start.failed", invocation.command.first(), e.message ?: e))
+        }
 
         errorMessage(res)?.let { throw IllegalStateException(it) }
         return CommitMessageParser.parse(res.stdout)
     }
 
+    /** How to run the CLI: command line, stdin and extra environment variables. */
+    internal data class Invocation(val command: List<String>, val stdin: String, val env: Map<String, String> = emptyMap())
+
+    /**
+     * CLI arguments for the Windows invocation.
+     * --tools= (no tools): classifying the diff doesn't require reading files or running anything. Written as
+     * `--tools=` rather than `--tools ""` because an empty quoted argument makes `cmd.exe /c` strip quotes and break
+     * paths with spaces.
+     * --no-session-persistence: doesn't leave a session in the history for every commit.
+     */
+    internal fun claudeArgs(model: String): List<String> =
+        listOf("-p", "--tools=", "--no-session-persistence") + (if (model.isNotBlank()) listOf("--model", model) else emptyList())
+
+    /**
+     * macOS/Linux: runs `claude` through a login shell so it finds the user's PATH. IntelliJ launched from the Dock
+     * doesn't inherit the terminal's PATH, so common install locations are prepended too. The prompt and the model are
+     * passed via environment variables to avoid interpolating user text into the script; the model is added with
+     * `set --` because zsh doesn't split `${VAR:+--model "$VAR"}` into two arguments. The diff goes through stdin.
+     */
+    internal fun unixInvocation(shell: String, prompt: String, diff: String, model: String): Invocation {
+        val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
+            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
+            "claude -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
+        return Invocation(
+            command = listOf(shell, "-l", "-c", script),
+            stdin = diff,
+            env = mapOf("CLAUDE_COMMIT_PROMPT" to prompt, "CLAUDE_COMMIT_MODEL" to model),
+        )
+    }
+
+    /**
+     * Windows (experimental): runs the CLI without a shell. The prompt and the diff both go through stdin, because
+     * `cmd.exe` would mangle a multi-line argument with quotes. `.cmd`/`.bat` shims (npm installs) need `cmd.exe /c`.
+     */
+    internal fun windowsInvocation(claude: String, prompt: String, diff: String, model: String): Invocation {
+        val launcher = if (claude.endsWith(".cmd", ignoreCase = true) || claude.endsWith(".bat", ignoreCase = true)) {
+            listOf("cmd.exe", "/c", claude)
+        } else {
+            listOf(claude)
+        }
+        return Invocation(command = launcher + claudeArgs(model), stdin = "$prompt\n\nDiff:\n$diff")
+    }
+
+    /**
+     * Finds the Claude Code CLI on Windows: first in PATH (native `claude.exe`, then npm's `claude.cmd`), then in the
+     * default locations of the native installer and npm. [exists] is injected so the lookup can be tested on any OS.
+     */
+    internal fun findWindowsClaude(env: Map<String, String>, exists: (String) -> Boolean): String? {
+        fun join(dir: String, name: String) = dir.trimEnd('\\', '/') + "\\" + name
+        val pathDirs = (env["PATH"] ?: env["Path"]).orEmpty().split(';').map { it.trim().trim('"') }.filter { it.isNotEmpty() }
+        val fromPath = listOf("claude.exe", "claude.cmd", "claude.bat").flatMap { name -> pathDirs.map { join(it, name) } }
+        val defaults = listOfNotNull(
+            env["USERPROFILE"]?.let { join(join(it, ".local\\bin"), "claude.exe") },
+            env["APPDATA"]?.let { join(join(it, "npm"), "claude.cmd") },
+        )
+        return (fromPath + defaults).firstOrNull(exists)
+    }
+
+    /** `$SHELL`, or the first available shell if it isn't set (e.g. some Linux desktop launchers). */
+    private fun defaultShell(): String =
+        System.getenv("SHELL")?.takeIf { it.isNotBlank() }
+            ?: listOf("/bin/zsh", "/bin/bash", "/bin/sh").firstOrNull { File(it).canExecute() }
+            ?: "/bin/sh"
+
     /** Turns a failed CLI result into an actionable, localized message; null if it succeeded. */
     internal fun errorMessage(res: ShellResult): String? {
         val output = res.stderr + "\n" + res.stdout
         return when {
-            res.exitCode == 127 || (res.exitCode != 0 && res.stderr.contains("command not found")) ->
+            // 127: POSIX shell "command not found"; 9009: cmd.exe "is not recognized as a command".
+            res.exitCode == 127 || res.exitCode == 9009 || (res.exitCode != 0 && res.stderr.contains("command not found")) ->
                 ClaudeCommitBundle.message("error.cli.not.found")
             res.exitCode != 0 && LOGIN_ERRORS.any { output.contains(it, ignoreCase = true) } ->
                 ClaudeCommitBundle.message("error.not.logged.in")

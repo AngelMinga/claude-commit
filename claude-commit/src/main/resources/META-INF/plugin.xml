@@ -16,7 +16,7 @@
       <li>fill in the commit message for you to review.</li>
     </ul>
 
-    <p><b>Requirements:</b> the <code>claude</code> CLI installed and logged in. It uses your Claude
+    <p><b>Requirements:</b> macOS or Linux (Windows support is experimental), and the <code>claude</code> CLI installed and logged in. It uses your Claude
     subscription; no API key is needed. Not affiliated with Anthropic.</p>
 
     <p><b>Settings</b> (<i>Settings → Tools → Commit Messages for Claude Code</i>): model (Haiku, Sonnet, Opus), message
@@ -26,6 +26,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.7.0</h3>
+    <ul>
+      <li>Experimental Windows support: finds <code>claude.exe</code> or npm's <code>claude.cmd</code> in PATH and the default install locations.</li>
+      <li>Clear error message when the Claude CLI cannot be started; Linux falls back to bash or sh when <code>$SHELL</code> is not set.</li>
+    </ul>
     <h3>1.6.0</h3>
     <ul><li>New setting "Always include a scope": titles always get a scope such as <code>feat(settings): …</code>, even if recent commits do not use one.</li></ul>
     <h3>1.5.0</h3>

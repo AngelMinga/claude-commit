@@ -41,6 +41,12 @@ class ClaudeClientErrorTest {
     }
 
     @Test
+    fun `cmd exe command not found`() {
+        val msg = error(9009, stderr = "'claude' is not recognized as an internal or external command")!!
+        assertTrue(msg, msg.startsWith("The \"claude\" CLI was not found"))
+    }
+
+    @Test
     fun `other errors show the details`() {
         assertEquals("Claude failed (exit code 2): boom", error(2, stderr = "boom"))
     }

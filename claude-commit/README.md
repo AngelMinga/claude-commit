@@ -13,6 +13,7 @@ Not affiliated with Anthropic.
 
 ## Requirements
 
+- macOS or Linux. Windows support is experimental: the plugin looks for `claude.exe` or npm's `claude.cmd` in `PATH`, `%USERPROFILE%\.local\bin` and `%APPDATA%\npm`.
 - Claude Code installed and logged in (run `claude` once and log in with your subscription).
 - IntelliJ IDEA, WebStorm, Rider, Android Studio, DataGrip or another JetBrains IDE, version 2025.2 or later (verified on 2026.2 and 2026.3).
 - To build it: JDK 21 (IntelliJ can download it: *Project Structure → SDK → Download JDK*).
