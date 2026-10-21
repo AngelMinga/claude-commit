@@ -1,6 +1,6 @@
 # Privacy Policy — Commit Messages for Claude Code
 
-_Last updated: October 12, 2026 (version 1.8.0)_
+_Last updated: October 21, 2026 (version 1.10.0)_
 
 Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that generates commit messages using the Claude Code CLI installed on your computer. This page explains what data the plugin handles and where it goes.
 
@@ -21,6 +21,7 @@ On each click, the plugin builds the following and passes it to the local `claud
 - the name of the current Git branch;
 - the titles (first line only) of the last 20 commits of the repository, so Claude can match their style. You can turn this off in _Settings → Tools → Commit Messages for Claude Code_ ("Match the style of recent commits in the repository");
 - the additional instructions you typed in the settings, if any;
+- in fast mode (on by default), the section of the project's `CLAUDE.md` that talks about commits, if there is one (only that section, not the rest of the file);
 - when you click **Retry**, the previous suggestion, so Claude can write a different one;
 - the instructions (prompt) that ask Claude to write the message, including the language you selected.
 
@@ -34,13 +35,14 @@ To limit what is shared, the plugin runs the CLI with:
 
 - `--tools ""`: Claude cannot read other files or run commands; it only sees the data listed above;
 - `--no-session-persistence`: the CLI does not save the conversation to your local session history;
-- a temporary working directory outside your project, so the CLI does not load your project's `CLAUDE.md`, hooks or MCP servers.
+- in fast mode, `--strict-mcp-config`: the CLI does not start your MCP servers for this request;
+- a temporary working directory outside your project, so the CLI does not load your project's `CLAUDE.md`, hooks or MCP servers (in fast mode the plugin adds only the commit section of `CLAUDE.md`, as listed above).
 
 **Do not check files that contain secrets** (passwords, API keys, private data) if you do not want them sent to Anthropic.
 
 ## What is stored on your computer
 
-The plugin only stores its settings (model, message language, timeout, the "match recent commits style", "always include a scope" and "overwrite without asking" options, and your additional instructions) in your IDE configuration, in `claudeCommit.xml`. They are not sent anywhere, except the additional instructions, which are included in the prompt as described above.
+The plugin only stores its settings (model, message language, timeout, the "fast mode", "match recent commits style", "always include a scope" and "overwrite without asking" options, and your additional instructions) in your IDE configuration, in `claudeCommit.xml`. They are not sent anywhere, except the additional instructions, which are included in the prompt as described above.
 
 ## Changes and contact
 

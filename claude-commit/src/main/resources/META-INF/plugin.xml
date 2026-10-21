@@ -28,6 +28,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.10.1</h3>
+    <ul><li>The button spinner no longer looks frozen, and the message field and progress bar show the elapsed seconds while Claude works.</li></ul>
+    <h3>1.10.0</h3>
+    <ul>
+      <li>New "Fast mode" setting (on by default): only the commit rules are sent as the system prompt and MCP servers are skipped, using far fewer tokens with the same model and rules. Falls back to the normal command on older Claude Code versions.</li>
+      <li>In fast mode, the commit section of the project's CLAUDE.md (if any) is added to the rules.</li>
+    </ul>
     <h3>1.9.1</h3>
     <ul><li>No longer uses internal IntelliJ Platform APIs (commit workflow, list renderer, message bundle), for better compatibility with future IDE versions.</li></ul>
     <h3>1.9.0</h3>

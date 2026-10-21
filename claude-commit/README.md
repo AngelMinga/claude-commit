@@ -39,6 +39,7 @@ Optional shortcut: *Settings → Keymap* → search for "Generate Commit Message
 
 - **Model**: CLI default, Haiku (fastest), Sonnet or Opus.
 - **Message language**: "Same as IDE" by default (commit messages follow the IDE language), or a fixed language that stays the same when you switch the IDE language.
+- **Fast mode** (on by default): sends only the commit rules as the system prompt and skips MCP servers, about 85% fewer input tokens with the same model and rules. Falls back to the normal command on older Claude Code versions.
 - **Timeout** in seconds.
 - **Match the style of recent commits**: sends the titles of the last 20 commits so Claude follows your scopes and conventions.
 - **Always include a scope**: titles always get a scope such as `feat(settings): …`, even if recent commits do not use one.

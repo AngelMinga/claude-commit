@@ -31,6 +31,8 @@ import com.intellij.vcsUtil.VcsUtil
 import java.awt.Component
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
+import javax.swing.Timer
 
 /**
  * Button in the commit dialog/panel:
@@ -50,6 +52,9 @@ class GenerateCommitAction : AnAction() {
         val running = project?.getUserData(RUNNING) == true
         e.presentation.isEnabled = e.presentation.isVisible && !running
         e.presentation.icon = if (running) AnimatedIcon.Default.INSTANCE else templatePresentation.icon
+        // A disabled button paints a grayed-out copy of its icon, which freezes the animation on its first frame.
+        // Giving it the animated icon as its disabled icon keeps the spinner moving.
+        e.presentation.disabledIcon = if (running) AnimatedIcon.Default.INSTANCE else null
     }
 
     override fun actionPerformed(e: AnActionEvent) {
@@ -98,12 +103,23 @@ class GenerateCommitAction : AnAction() {
         messageField?.setPlaceholder(ClaudeCommitBundle.message("progress.placeholder"))
         setRunning(project, true)
 
+        // Elapsed seconds in the message field and the progress bar, so it's visible that the request is still running.
+        val startedAt = System.currentTimeMillis()
+        val taskIndicator = AtomicReference<ProgressIndicator>()
+        val ticker = Timer(1000) {
+            val seconds = (System.currentTimeMillis() - startedAt) / 1000
+            messageField?.setPlaceholder(ClaudeCommitBundle.message("progress.placeholder.elapsed", seconds))
+            taskIndicator.get()?.text2 = ClaudeCommitBundle.message("progress.elapsed", seconds)
+        }
+        ticker.start()
+
         val retryWith = { retryFrom: String? -> retry(project, messageControl, panel, retryFrom) }
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, ClaudeCommitBundle.message("task.title"), true) {
             private var result: CommitSuggestion? = null
 
             override fun run(indicator: ProgressIndicator) {
+                taskIndicator.set(indicator)
                 indicator.isIndeterminate = true
                 indicator.text = ClaudeCommitBundle.message("task.preparing.diff")
                 val diff = DiffCollector.collect(project, changes, unversioned)
@@ -118,8 +134,16 @@ class GenerateCommitAction : AnAction() {
                     emptyList()
                 }
 
+                val projectCommitRules = if (ClaudeCommitSettings.getInstance().state.fastMode) {
+                    projectCommitRules(project, repoRoot)
+                } else {
+                    null
+                }
+
                 indicator.text = ClaudeCommitBundle.message("task.asking.claude")
-                result = ClaudeClient.suggest(diff, branch, recentCommits, previousSuggestion, indicator)
+                result = ClaudeClient.suggest(diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator) {
+                    notify(project, ClaudeCommitBundle.message("notification.fast.unsupported"), NotificationType.WARNING)
+                }
             }
 
             override fun onSuccess() {
@@ -149,6 +173,7 @@ class GenerateCommitAction : AnAction() {
             }
 
             override fun onFinished() {
+                ticker.stop()
                 messageField?.setPlaceholder(VcsBundle.message("commit.message.placeholder"))
                 setRunning(project, false)
             }
@@ -178,6 +203,16 @@ class GenerateCommitAction : AnAction() {
         val changedPaths = changes.mapTo(HashSet()) { ChangesUtil.getFilePath(it).path }
         return panel.virtualFiles.filter { it.path !in changedPaths }.map { VcsUtil.getFilePath(it) }
     }
+
+    /**
+     * Commit section of the project's CLAUDE.md (fast mode only: the CLI runs outside the project and doesn't load it).
+     * Looks in the repository root and the project directory, at `CLAUDE.md` and `.claude/CLAUDE.md`.
+     */
+    private fun projectCommitRules(project: Project, repoRoot: File): String? =
+        listOfNotNull(repoRoot, project.basePath?.let(::File)).distinct()
+            .flatMap { listOf(File(it, "CLAUDE.md"), File(it, ".claude/CLAUDE.md")) }
+            .filter { it.isFile && it.length() < MAX_CLAUDE_MD_BYTES }
+            .firstNotNullOfOrNull { file -> runCatching { ClaudeClient.commitSection(file.readText(Charsets.UTF_8)) }.getOrNull() }
 
     /** Titles of the latest commits (no merges); empty if it isn't a git repo or has no commits yet. */
     private fun recentCommitSubjects(repoRoot: File): List<String> =
@@ -228,5 +263,6 @@ class GenerateCommitAction : AnAction() {
 
     companion object {
         private val RUNNING = Key.create<Boolean>("ClaudeCommit.running")
+        private const val MAX_CLAUDE_MD_BYTES = 512 * 1024
     }
 }

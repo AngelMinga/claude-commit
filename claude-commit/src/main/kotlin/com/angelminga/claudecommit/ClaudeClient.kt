@@ -104,14 +104,42 @@ object ClaudeClient {
             .take(RECENT_COMMITS)
             .toList()
 
+    /**
+     * Set when the installed CLI rejects a fast mode option: fast mode is skipped (and the user told once) for the rest
+     * of the IDE session. Reset on restart, so updating Claude Code is picked up.
+     */
+    @Volatile
+    private var fastModeUnsupported = false
+
     fun suggest(
         diff: String,
         branch: String,
         recentCommits: List<String>,
         previousSuggestion: String?,
+        projectCommitRules: String?,
         indicator: ProgressIndicator,
+        onFastModeUnsupported: () -> Unit,
     ): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
+        if (settings.state.fastMode && !fastModeUnsupported) {
+            val res = runFast(settings, diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator)
+            if (!isUnsupportedOption(res)) return parseOrThrow(res)
+            // Older CLI: fall back to the normal command, now and for the rest of the session.
+            fastModeUnsupported = true
+            onFastModeUnsupported()
+        }
+        return parseOrThrow(runNormal(settings, diff, branch, recentCommits, previousSuggestion, indicator))
+    }
+
+    /** Normal mode: the original command, with the whole prompt as an argument (Unix) and the diff through stdin. */
+    private fun runNormal(
+        settings: ClaudeCommitSettings,
+        diff: String,
+        branch: String,
+        recentCommits: List<String>,
+        previousSuggestion: String?,
+        indicator: ProgressIndicator,
+    ): ShellResult {
         val prompt = prompt(
             branch,
             settings.language,
@@ -121,22 +149,177 @@ object ClaudeClient {
             previousSuggestion,
         )
         val invocation = if (SystemInfo.isWindows) {
-            val claude = findWindowsClaude(System.getenv()) { File(it).isFile }
-                ?: throw IllegalStateException(ClaudeCommitBundle.message("error.cli.not.found"))
-            windowsInvocation(claude, prompt, diff, settings.model)
+            windowsInvocation(windowsClaude(), prompt, diff, settings.model)
         } else {
             unixInvocation(defaultShell(), prompt, diff, settings.model)
         }
+        return run(invocation, settings, indicator)
+    }
 
-        val res = try {
+    /**
+     * Fast mode: the rules replace Claude Code's default system prompt (much shorter, so the first token comes sooner)
+     * and MCP servers are skipped; the data (branch, recent titles, rejected suggestion, diff) goes through stdin.
+     */
+    private fun runFast(
+        settings: ClaudeCommitSettings,
+        diff: String,
+        branch: String,
+        recentCommits: List<String>,
+        previousSuggestion: String?,
+        projectCommitRules: String?,
+        indicator: ProgressIndicator,
+    ): ShellResult {
+        val system = systemPrompt(
+            settings.language,
+            hasRecentCommits = recentCommits.isNotEmpty(),
+            alwaysIncludeScope = settings.state.alwaysIncludeScope,
+            extraInstructions = settings.extraInstructions,
+            isRetry = !previousSuggestion.isNullOrBlank(),
+            projectCommitRules = projectCommitRules,
+        )
+        val user = userMessage(branch, recentCommits, previousSuggestion, diff)
+        if (!SystemInfo.isWindows) {
+            return run(unixFastInvocation(defaultShell(), system, user, settings.model), settings, indicator)
+        }
+        // cmd.exe can't pass a multi-line argument, so on Windows the system prompt goes through a temporary file.
+        val file = File.createTempFile("system-prompt", ".txt", neutralDir())
+        try {
+            file.writeText(system, Charsets.UTF_8)
+            return run(windowsFastInvocation(windowsClaude(), file.path, user, settings.model), settings, indicator)
+        } finally {
+            file.delete()
+        }
+    }
+
+    private fun run(invocation: Invocation, settings: ClaudeCommitSettings, indicator: ProgressIndicator): ShellResult =
+        try {
             Shell.run(invocation.command, neutralDir(), invocation.stdin, invocation.env, settings.timeoutSec, indicator)
         } catch (e: IOException) {
             throw IllegalStateException(ClaudeCommitBundle.message("error.cli.start.failed", invocation.command.first(), e.message ?: e))
         }
 
+    private fun parseOrThrow(res: ShellResult): CommitSuggestion {
         errorMessage(res)?.let { throw IllegalStateException(it) }
         return CommitMessageParser.parse(res.stdout)
     }
+
+    private fun windowsClaude(): String =
+        findWindowsClaude(System.getenv()) { File(it).isFile }
+            ?: throw IllegalStateException(ClaudeCommitBundle.message("error.cli.not.found"))
+
+    /** The CLI rejected an option (e.g. `error: unknown option '--strict-mcp-config'` on an older Claude Code). */
+    internal fun isUnsupportedOption(res: ShellResult): Boolean =
+        res.exitCode != 0 && UNSUPPORTED_OPTION.containsMatchIn(res.stderr + "\n" + res.stdout)
+
+    private val UNSUPPORTED_OPTION =
+        Regex("""unknown option|unknown argument|unrecognized (option|argument)|unexpected argument""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Fast mode system prompt: the same rules as [prompt], worded for data that arrives in the user message.
+     * [projectCommitRules] is the commit section of the project's CLAUDE.md, if any.
+     */
+    internal fun systemPrompt(
+        language: String,
+        hasRecentCommits: Boolean = false,
+        alwaysIncludeScope: Boolean = false,
+        extraInstructions: String = "",
+        isRetry: Boolean = false,
+        projectCommitRules: String? = null,
+    ): String {
+        val intro = """
+            You write Git commit messages. The user message contains the current branch, optionally the titles of the latest commits and a previous suggestion the user rejected, and then the diff.
+
+            Classify the change in the diff according to Conventional Commits.
+
+            Valid types:
+            - feat: a new feature for the user
+            - fix: a bug fix
+            - refactor: a code change that neither adds a feature nor fixes a bug
+            - perf: a performance improvement
+            - style: formatting, whitespace, semicolons (no logic change)
+            - docs: documentation only
+            - test: adds or fixes tests
+            - build: build system or dependencies (package.json, gradle, pubspec…)
+            - ci: CI/CD configuration
+            - chore: maintenance tasks that don't touch source code or tests
+            - revert: reverts a previous commit
+
+            If the branch name contains a ticket ID (e.g. ABC-123), include it in the title.
+
+            Write the reason, the title and the body in $language. The TYPE, REASON and MESSAGE labels are not translated.
+        """.trimIndent()
+
+        val style = if (hasRecentCommits) {
+            "Match the style of the latest commit titles listed in the user message " +
+                "(scopes in use, capitalization, length, ticket ID format), but always write in $language " +
+                "and follow the requested Conventional Commits format. They are only a reference: do not copy their content."
+        } else {
+            null
+        }
+        val retry = if (isRetry) {
+            "The user rejected the previous suggestion included in the user message and wants a different one. Write a new " +
+                "message with different wording; change the type or scope only if a better one fits."
+        } else {
+            null
+        }
+        val projectRules = projectCommitRules?.takeIf { it.isNotBlank() }?.let {
+            "Commit conventions from the project's CLAUDE.md (follow them unless they conflict with the reply format below):\n" +
+                it.trim()
+        }
+        val scope = if (alwaysIncludeScope) "<scope>" else "<optional scope>"
+        val format = """
+            Reply EXACTLY in this format, without code blocks:
+            TYPE: <type>
+            REASON: <one sentence explaining why it is that type>
+            MESSAGE:
+            <type>($scope): <title in the imperative mood, max. 72 characters>
+
+            <optional body with short bullet points, only if it adds value>
+        """.trimIndent()
+
+        return listOfNotNull(
+            intro,
+            style,
+            scopeRule(alwaysIncludeScope),
+            projectRules,
+            extraInstructionsSection(extraInstructions),
+            retry,
+            format,
+        ).joinToString("\n\n")
+    }
+
+    /** Fast mode user message (sent through stdin): only data, no rules. */
+    internal fun userMessage(branch: String, recentCommits: List<String>, previousSuggestion: String?, diff: String): String =
+        listOfNotNull(
+            "Current branch: $branch",
+            recentCommits.takeIf { it.isNotEmpty() }?.let { titles ->
+                "Titles of the latest commits, newest first:\n" + titles.joinToString("\n") { "- $it" }
+            },
+            previousSuggestion?.takeIf { it.isNotBlank() }?.let { "Rejected previous suggestion:\n${it.trim()}" },
+            "Diff:\n$diff",
+        ).joinToString("\n\n")
+
+    /**
+     * Commit-related section of a CLAUDE.md: the first heading that mentions "commit" and everything until the next
+     * heading of the same or a higher level (headings inside code fences are ignored). Null if there is none.
+     */
+    internal fun commitSection(markdown: String, maxChars: Int = MAX_PROJECT_RULES_CHARS): String? {
+        val headings = mutableListOf<Pair<Int, Int>>() // line index to heading level
+        var inFence = false
+        val lines = markdown.lines()
+        lines.forEachIndexed { i, line ->
+            if (line.trimStart().startsWith("```")) inFence = !inFence
+            if (!inFence) HEADING.find(line)?.let { headings += i to it.groupValues[1].length }
+        }
+        val start = headings.firstOrNull { (i, _) -> COMMIT_WORD.containsMatchIn(lines[i]) } ?: return null
+        val end = headings.firstOrNull { (i, level) -> i > start.first && level <= start.second }?.first ?: lines.size
+        val section = lines.subList(start.first, end).joinToString("\n").trim()
+        return if (section.length > maxChars) section.take(maxChars) + "…" else section
+    }
+
+    private const val MAX_PROJECT_RULES_CHARS = 4000
+    private val HEADING = Regex("""^(#{1,6})\s+\S""")
+    private val COMMIT_WORD = Regex("""\bcommit""", RegexOption.IGNORE_CASE)
 
     /** How to run the CLI: command line, stdin and extra environment variables. */
     internal data class Invocation(val command: List<String>, val stdin: String, val env: Map<String, String> = emptyMap())
@@ -173,13 +356,15 @@ object ClaudeClient {
      * `cmd.exe` would mangle a multi-line argument with quotes. `.cmd`/`.bat` shims (npm installs) need `cmd.exe /c`.
      */
     internal fun windowsInvocation(claude: String, prompt: String, diff: String, model: String): Invocation {
-        val launcher = if (claude.endsWith(".cmd", ignoreCase = true) || claude.endsWith(".bat", ignoreCase = true)) {
+        return Invocation(command = windowsLauncher(claude) + claudeArgs(model), stdin = "$prompt\n\nDiff:\n$diff")
+    }
+
+    private fun windowsLauncher(claude: String): List<String> =
+        if (claude.endsWith(".cmd", ignoreCase = true) || claude.endsWith(".bat", ignoreCase = true)) {
             listOf("cmd.exe", "/c", claude)
         } else {
             listOf(claude)
         }
-        return Invocation(command = launcher + claudeArgs(model), stdin = "$prompt\n\nDiff:\n$diff")
-    }
 
     /**
      * Finds the Claude Code CLI on Windows: first in PATH (native `claude.exe`, then npm's `claude.cmd`), then in the
@@ -194,6 +379,29 @@ object ClaudeClient {
             env["APPDATA"]?.let { join(join(it, "npm"), "claude.cmd") },
         )
         return (fromPath + defaults).firstOrNull(exists)
+    }
+
+    /**
+     * macOS/Linux fast mode: same login shell, PATH and model handling as [unixInvocation]. The system prompt goes
+     * through an environment variable and the user message through stdin. No `--bare` (it breaks subscription login)
+     * and no `--setting-sources`.
+     */
+    internal fun unixFastInvocation(shell: String, systemPrompt: String, userMessage: String, model: String): Invocation {
+        val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
+            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
+            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence"
+        return Invocation(
+            command = listOf(shell, "-l", "-c", script),
+            stdin = userMessage,
+            env = mapOf("CLAUDE_COMMIT_SYSTEM_PROMPT" to systemPrompt, "CLAUDE_COMMIT_MODEL" to model),
+        )
+    }
+
+    /** Windows fast mode (experimental): the system prompt is read from [systemPromptFile]; no quoted or empty args. */
+    internal fun windowsFastInvocation(claude: String, systemPromptFile: String, userMessage: String, model: String): Invocation {
+        val args = listOf("-p") + (if (model.isNotBlank()) listOf("--model", model) else emptyList()) +
+            listOf("--system-prompt-file", systemPromptFile, "--tools=", "--strict-mcp-config", "--no-session-persistence")
+        return Invocation(command = windowsLauncher(claude) + args, stdin = userMessage)
     }
 
     /** `$SHELL`, or the first available shell if it isn't set (e.g. some Linux desktop launchers). */

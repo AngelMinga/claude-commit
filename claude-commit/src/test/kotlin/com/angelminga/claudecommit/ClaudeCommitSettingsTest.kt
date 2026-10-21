@@ -32,6 +32,11 @@ class ClaudeCommitSettingsTest {
     }
 
     @Test
+    fun `fast mode is on by default`() {
+        assertEquals(true, ClaudeCommitSettings.Settings().fastMode)
+    }
+
+    @Test
     fun `extra instructions are trimmed and capped`() {
         val settings = ClaudeCommitSettings().apply {
             loadState(ClaudeCommitSettings.Settings().also { it.extraInstructions = "  " + "x".repeat(1500) + "  " })

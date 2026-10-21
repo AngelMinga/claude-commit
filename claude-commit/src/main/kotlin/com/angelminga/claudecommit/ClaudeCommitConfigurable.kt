@@ -57,6 +57,11 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
                         { settings.language = it?.value ?: ClaudeCommitSettings.DEFAULT_LANGUAGE },
                     )
             }
+            row {
+                checkBox(ClaudeCommitBundle.message("settings.fast"))
+                    .bindSelected({ settings.fastMode }, { settings.fastMode = it })
+                    .comment(ClaudeCommitBundle.message("settings.fast.comment"))
+            }
             row(ClaudeCommitBundle.message("settings.timeout")) {
                 intTextField(ClaudeCommitSettings.MIN_TIMEOUT_SEC..ClaudeCommitSettings.MAX_TIMEOUT_SEC)
                     .bindIntText({ settings.timeoutSec }, { settings.timeoutSec = it })

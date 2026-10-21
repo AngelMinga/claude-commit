@@ -1,0 +1,2 @@
+<!-- Since 2026.3 VCS support is the com.intellij.platform.vcs plugin: depending on it (optionally) makes its classes visible. -->
+<idea-plugin/>

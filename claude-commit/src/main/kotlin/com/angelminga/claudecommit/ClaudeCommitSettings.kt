@@ -25,6 +25,8 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
         var imitateRepoStyle by property(true)
         /** Makes the scope mandatory in the title (e.g. `feat(settings): …`). */
         var alwaysIncludeScope by property(false)
+        /** Short system prompt + no MCP servers, so Claude answers sooner (same model and rules). */
+        var fastMode by property(true)
         /** Free text appended to the prompt (e.g. "Explain why in the body"). */
         var extraInstructions by string("")
     }
