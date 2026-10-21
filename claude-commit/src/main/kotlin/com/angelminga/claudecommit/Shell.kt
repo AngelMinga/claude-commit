@@ -19,6 +19,7 @@ object Shell {
         env: Map<String, String> = emptyMap(),
         timeoutSec: Long,
         indicator: ProgressIndicator? = null,
+        onStdoutLine: ((String) -> Unit)? = null,
     ): ShellResult {
         val process = ProcessBuilder(command)
             .directory(dir)
@@ -26,7 +27,15 @@ object Shell {
             .start()
 
         val executor = AppExecutorUtil.getAppExecutorService()
-        val out = executor.submit(Callable { process.inputStream.bufferedReader(Charsets.UTF_8).readText() })
+        // With onStdoutLine, stdout is also delivered line by line as it arrives (on a pooled thread).
+        val out = executor.submit(Callable {
+            val reader = process.inputStream.bufferedReader(Charsets.UTF_8)
+            if (onStdoutLine == null) {
+                reader.readText()
+            } else {
+                buildString { reader.forEachLine { line -> append(line).append('\n'); onStdoutLine(line) } }
+            }
+        })
         val err = executor.submit(Callable { process.errorStream.bufferedReader(Charsets.UTF_8).readText() })
 
         // stdin on another thread: if the process is slow to read, writing a diff larger than the pipe buffer

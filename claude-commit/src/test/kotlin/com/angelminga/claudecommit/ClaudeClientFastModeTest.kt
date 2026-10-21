@@ -14,7 +14,8 @@ class ClaudeClientFastModeTest {
         assertEquals(listOf("/bin/zsh", "-l", "-c"), inv.command.take(3))
         val script = inv.command[3]
         assertTrue(script, script.endsWith(
-            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence"
+            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence " +
+                "--output-format stream-json --verbose --include-partial-messages"
         ))
         assertTrue(script.contains("set -- --model \"\$CLAUDE_COMMIT_MODEL\""))
         assertFalse(script.contains("--bare"))
@@ -31,6 +32,7 @@ class ClaudeClientFastModeTest {
             listOf(
                 "cmd.exe", "/c", "C:\\Users\\Ana Pérez\\npm\\claude.cmd", "-p", "--model", "haiku",
                 "--system-prompt-file", "C:\\Temp\\sp.txt", "--tools=", "--strict-mcp-config", "--no-session-persistence",
+                "--output-format", "stream-json", "--verbose", "--include-partial-messages",
             ),
             inv.command,
         )

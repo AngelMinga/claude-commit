@@ -28,6 +28,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.11.0</h3>
+    <ul>
+      <li>Fast mode streams the reply: the commit message appears in the field as Claude writes it.</li>
+      <li>Generated files (build, dist, bin, node_modules…), lock files and minified bundles are listed by name only, so the diff sent to Claude is smaller and the message focuses on the real changes.</li>
+    </ul>
     <h3>1.10.1</h3>
     <ul><li>The button spinner no longer looks frozen, and the message field and progress bar show the elapsed seconds while Claude works.</li></ul>
     <h3>1.10.0</h3>

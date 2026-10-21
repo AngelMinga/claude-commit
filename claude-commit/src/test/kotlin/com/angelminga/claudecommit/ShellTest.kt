@@ -27,6 +27,18 @@ class ShellTest {
     }
 
     @Test
+    fun `stdout lines are delivered while the process is still running`() {
+        val seen = mutableListOf<Pair<String, Long>>()
+        val start = System.currentTimeMillis()
+        val res = Shell.run(listOf("/bin/sh", "-c", "echo one; sleep 1; echo two"), dir, timeoutSec = 10, onStdoutLine = { line ->
+            synchronized(seen) { seen += line to System.currentTimeMillis() - start }
+        })
+        assertEquals("one\ntwo\n", res.stdout)
+        assertEquals(listOf("one", "two"), seen.map { it.first })
+        assertTrue("first line should arrive before the process ends: $seen", seen[0].second < seen[1].second - 500)
+    }
+
+    @Test
     fun `timeout even if the process does not read stdin`() {
         val start = System.currentTimeMillis()
         try {

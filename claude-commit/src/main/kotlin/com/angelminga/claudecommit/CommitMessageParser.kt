@@ -19,6 +19,16 @@ object CommitMessageParser {
     private val REASON_LINE = Regex("""(?imu)^(?:REASON|RAZ[OÓ]N):\s*(.+)$""")
     private val MESSAGE_BLOCK = Regex("""(?is)(?:MESSAGE|MENSAJE):[ \t]*\r?\n?(.*)""")
 
+    /**
+     * The commit message part of a reply that is still being streamed: whatever follows `MESSAGE:` so far, or null if
+     * that label hasn't arrived yet (the TYPE and REASON lines are not shown to the user).
+     */
+    fun partialMessage(raw: String): String? {
+        val match = MESSAGE_BLOCK.find(raw.replace(OPENING_FENCE, "")) ?: return null
+        return match.groupValues[1].replace(OPENING_FENCE, "").replace(CLOSING_FENCE, "").trimStart().trimEnd('`').trimEnd()
+            .takeIf { it.isNotEmpty() }
+    }
+
     fun parse(raw: String): CommitSuggestion {
         val text = raw.trim().replace(OPENING_FENCE, "").replace(CLOSING_FENCE, "").trim()
         val type = TYPE_LINE.find(text)?.groupValues?.get(1)?.lowercase()

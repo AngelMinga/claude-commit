@@ -1,6 +1,6 @@
 # Privacy Policy — Commit Messages for Claude Code
 
-_Last updated: October 21, 2026 (version 1.10.0)_
+_Last updated: October 21, 2026 (version 1.11.0)_
 
 Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that generates commit messages using the Claude Code CLI installed on your computer. This page explains what data the plugin handles and where it goes.
 
@@ -16,7 +16,7 @@ Data is only processed when you click **Generate Commit Message with Claude** in
 
 On each click, the plugin builds the following and passes it to the local `claude` CLI:
 
-- the diff of the files you **checked** in the commit panel (unchecked files are not included), limited to 15,000 characters per file and 100,000 characters in total;
+- the diff of the files you **checked** in the commit panel (unchecked files are not included), limited to 15,000 characters per file and 100,000 characters in total. For generated files (`build/`, `dist/`, `bin/`, `node_modules/`…), lock files and minified files only the path is sent, not the content;
 - the file paths and their change status (new, modified, deleted, moved);
 - the name of the current Git branch;
 - the titles (first line only) of the last 20 commits of the repository, so Claude can match their style. You can turn this off in _Settings → Tools → Commit Messages for Claude Code_ ("Match the style of recent commits in the repository");

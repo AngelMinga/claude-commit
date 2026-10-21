@@ -7,6 +7,8 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -31,6 +33,7 @@ import com.intellij.vcsUtil.VcsUtil
 import java.awt.Component
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.Timer
 
@@ -103,6 +106,27 @@ class GenerateCommitAction : AnAction() {
         messageField?.setPlaceholder(ClaudeCommitBundle.message("progress.placeholder"))
         setRunning(project, true)
 
+        // Streaming: the message is written into the field as it arrives, but only if the field is empty now (it never
+        // overwrites the user's text) and only while the user doesn't type in it.
+        val streaming = AtomicBoolean(messageUi?.text.isNullOrBlank())
+        val lastStreamed = AtomicReference<String?>()
+        val modality = (messageControl as? Component)?.let { ModalityState.stateForComponent(it) } ?: ModalityState.defaultModalityState()
+        val onPartialText = { raw: String ->
+            val text = CommitMessageParser.partialMessage(raw)
+            if (text != null && streaming.get()) {
+                ApplicationManager.getApplication().invokeLater({
+                    val current = messageUi?.text.orEmpty()
+                    if (!streaming.get()) return@invokeLater
+                    if (current.isBlank() || current == lastStreamed.get()) {
+                        messageControl.setCommitMessage(text)
+                        lastStreamed.set(text)
+                    } else {
+                        streaming.set(false) // the user typed something: leave the field alone
+                    }
+                }, modality)
+            }
+        }
+
         // Elapsed seconds in the message field and the progress bar, so it's visible that the request is still running.
         val startedAt = System.currentTimeMillis()
         val taskIndicator = AtomicReference<ProgressIndicator>()
@@ -141,14 +165,22 @@ class GenerateCommitAction : AnAction() {
                 }
 
                 indicator.text = ClaudeCommitBundle.message("task.asking.claude")
-                result = ClaudeClient.suggest(diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator) {
-                    notify(project, ClaudeCommitBundle.message("notification.fast.unsupported"), NotificationType.WARNING)
-                }
+                result = ClaudeClient.suggest(
+                    diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator,
+                    onFastModeUnsupported = {
+                        notify(project, ClaudeCommitBundle.message("notification.fast.unsupported"), NotificationType.WARNING)
+                    },
+                    onPartialText = onPartialText,
+                )
             }
 
             override fun onSuccess() {
                 val s = result ?: return restorePrevious()
-                if (!replaceWithoutAsking && !confirmOverwrite(project, messageUi?.text)) return
+                streaming.set(false)
+                // Text the plugin streamed into the field is its own, so it's replaced without asking.
+                val current = messageUi?.text
+                val ownText = current != null && current == lastStreamed.get()
+                if (!replaceWithoutAsking && !ownText && !confirmOverwrite(project, current)) return
                 messageControl.setCommitMessage(s.message)
                 val detail = buildString {
                     append("<b>${escape(ClaudeCommitBundle.message("notification.detected.type", typeLabel(s.type)))}</b>")
@@ -167,12 +199,19 @@ class GenerateCommitAction : AnAction() {
                 restorePrevious()
             }
 
-            /** Puts back the text cleared at the start, unless the user typed something in the meantime. */
+            /**
+             * Puts back the text cleared at the start and removes a partially streamed message, unless the user typed
+             * something in the meantime.
+             */
             private fun restorePrevious() {
-                if (clearedUpfront && messageUi?.text.isNullOrBlank()) messageControl.setCommitMessage(previousMessage)
+                streaming.set(false)
+                val current = messageUi?.text
+                val untouched = current.isNullOrBlank() || current == lastStreamed.get()
+                if (untouched && (clearedUpfront || lastStreamed.get() != null)) messageControl.setCommitMessage(previousMessage)
             }
 
             override fun onFinished() {
+                streaming.set(false)
                 ticker.stop()
                 messageField?.setPlaceholder(VcsBundle.message("commit.message.placeholder"))
                 setRunning(project, false)

@@ -4,10 +4,10 @@ A JetBrains IDE plugin that writes [Conventional Commits](https://www.convention
 
 It adds a button to the commit panel. When you click it, the plugin:
 
-1. Takes the files checked for the commit (including unversioned files and partial commits).
+1. Takes the files checked for the commit (including unversioned files and partial commits). Generated files, lock files and minified bundles are listed by name only, so they don't drown out the real changes.
 2. Sends the diff to `claude -p`, using your Claude Pro/Max subscription (no API key).
 3. Shows a notification with the **detected type** (`feat`, `fix`, `refactor`…) and the reason.
-4. Fills in the commit message for you to review.
+4. Fills in the commit message for you to review. In fast mode the message appears in the field as Claude writes it.
 
 Not affiliated with Anthropic.
 

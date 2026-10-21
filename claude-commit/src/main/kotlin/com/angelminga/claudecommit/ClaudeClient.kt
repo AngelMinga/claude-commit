@@ -119,10 +119,11 @@ object ClaudeClient {
         projectCommitRules: String?,
         indicator: ProgressIndicator,
         onFastModeUnsupported: () -> Unit,
+        onPartialText: (String) -> Unit = {},
     ): CommitSuggestion {
         val settings = ClaudeCommitSettings.getInstance()
         if (settings.state.fastMode && !fastModeUnsupported) {
-            val res = runFast(settings, diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator)
+            val res = runFast(settings, diff, branch, recentCommits, previousSuggestion, projectCommitRules, indicator, onPartialText)
             if (!isUnsupportedOption(res)) return parseOrThrow(res)
             // Older CLI: fall back to the normal command, now and for the rest of the session.
             fastModeUnsupported = true
@@ -168,6 +169,7 @@ object ClaudeClient {
         previousSuggestion: String?,
         projectCommitRules: String?,
         indicator: ProgressIndicator,
+        onPartialText: (String) -> Unit,
     ): ShellResult {
         val system = systemPrompt(
             settings.language,
@@ -178,22 +180,47 @@ object ClaudeClient {
             projectCommitRules = projectCommitRules,
         )
         val user = userMessage(branch, recentCommits, previousSuggestion, diff)
-        if (!SystemInfo.isWindows) {
-            return run(unixFastInvocation(defaultShell(), system, user, settings.model), settings, indicator)
+        // Streamed reply: text fragments are accumulated and reported as they arrive.
+        val partial = StringBuilder()
+        val onLine = { line: String ->
+            StreamJson.textDelta(line)?.let { fragment -> onPartialText(partial.append(fragment).toString()) }
+            Unit
         }
-        // cmd.exe can't pass a multi-line argument, so on Windows the system prompt goes through a temporary file.
-        val file = File.createTempFile("system-prompt", ".txt", neutralDir())
-        try {
-            file.writeText(system, Charsets.UTF_8)
-            return run(windowsFastInvocation(windowsClaude(), file.path, user, settings.model), settings, indicator)
-        } finally {
-            file.delete()
+        val raw = if (!SystemInfo.isWindows) {
+            run(unixFastInvocation(defaultShell(), system, user, settings.model), settings, indicator, onLine)
+        } else {
+            // cmd.exe can't pass a multi-line argument, so on Windows the system prompt goes through a temporary file.
+            val file = File.createTempFile("system-prompt", ".txt", neutralDir())
+            try {
+                file.writeText(system, Charsets.UTF_8)
+                run(windowsFastInvocation(windowsClaude(), file.path, user, settings.model), settings, indicator, onLine)
+            } finally {
+                file.delete()
+            }
         }
+        return fromStream(raw, partial.toString())
     }
 
-    private fun run(invocation: Invocation, settings: ClaudeCommitSettings, indicator: ProgressIndicator): ShellResult =
+    /**
+     * Turns a stream-json run into a plain result, so the parser, [errorMessage] and [isUnsupportedOption] work as in
+     * normal mode: stdout becomes the final `result` text (or the accumulated fragments if it's missing), and a result
+     * flagged `is_error` (e.g. "Not logged in · Please run /login") never counts as a success. stderr is kept as is.
+     */
+    internal fun fromStream(raw: ShellResult, accumulated: String): ShellResult {
+        val result = raw.stdout.lineSequence().mapNotNull(StreamJson::result).lastOrNull()
+        val text = result?.text ?: accumulated
+        val exitCode = if (result?.isError == true && raw.exitCode == 0) 1 else raw.exitCode
+        return ShellResult(exitCode, text, raw.stderr)
+    }
+
+    private fun run(
+        invocation: Invocation,
+        settings: ClaudeCommitSettings,
+        indicator: ProgressIndicator,
+        onStdoutLine: ((String) -> Unit)? = null,
+    ): ShellResult =
         try {
-            Shell.run(invocation.command, neutralDir(), invocation.stdin, invocation.env, settings.timeoutSec, indicator)
+            Shell.run(invocation.command, neutralDir(), invocation.stdin, invocation.env, settings.timeoutSec, indicator, onStdoutLine)
         } catch (e: IOException) {
             throw IllegalStateException(ClaudeCommitBundle.message("error.cli.start.failed", invocation.command.first(), e.message ?: e))
         }
@@ -389,7 +416,8 @@ object ClaudeClient {
     internal fun unixFastInvocation(shell: String, systemPrompt: String, userMessage: String, model: String): Invocation {
         val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
             "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
-            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence"
+            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence " +
+            STREAM_ARGS.joinToString(" ")
         return Invocation(
             command = listOf(shell, "-l", "-c", script),
             stdin = userMessage,
@@ -400,9 +428,13 @@ object ClaudeClient {
     /** Windows fast mode (experimental): the system prompt is read from [systemPromptFile]; no quoted or empty args. */
     internal fun windowsFastInvocation(claude: String, systemPromptFile: String, userMessage: String, model: String): Invocation {
         val args = listOf("-p") + (if (model.isNotBlank()) listOf("--model", model) else emptyList()) +
-            listOf("--system-prompt-file", systemPromptFile, "--tools=", "--strict-mcp-config", "--no-session-persistence")
+            listOf("--system-prompt-file", systemPromptFile, "--tools=", "--strict-mcp-config", "--no-session-persistence") +
+            STREAM_ARGS
         return Invocation(command = windowsLauncher(claude) + args, stdin = userMessage)
     }
+
+    /** Fast mode reply as stream-json events with partial text (`--verbose` is required by stream-json in print mode). */
+    private val STREAM_ARGS = listOf("--output-format", "stream-json", "--verbose", "--include-partial-messages")
 
     /** `$SHELL`, or the first available shell if it isn't set (e.g. some Linux desktop launchers). */
     private fun defaultShell(): String =

@@ -49,6 +49,14 @@ object DiffCollector {
                 change.beforeRevision?.file?.let { out.append("(previously: ${relative(it, rootDir)})\n") }
             }
 
+            // Generated files, lock files and minified bundles are listed but their content is left out: it's noise for
+            // the message and wastes most of the size budget.
+            val omitted = omittedReason(relative(filePath, rootDir))
+            if (omitted != null) {
+                out.append("[$omitted: content omitted]\n")
+                continue
+            }
+
             val fileDiff = fileDiff(project, change, rootDir)
             out.append(fileDiff.take(MAX_FILE_CHARS))
             if (fileDiff.length > MAX_FILE_CHARS) out.append("\n[... file truncated ...]")
@@ -67,6 +75,31 @@ object DiffCollector {
         } catch (e: VcsException) {
             "[could not build the diff: ${e.message}]"
         }
+    }
+
+    private val GENERATED_DIRS = setOf(
+        "build", "dist", "out", "target", "bin", "node_modules", ".gradle", "coverage", "__pycache__", ".next", ".nuxt",
+    )
+    private val LOCK_FILES = setOf(
+        "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "Cargo.lock", "Gemfile.lock", "poetry.lock",
+        "Pipfile.lock", "composer.lock", "Podfile.lock", "pubspec.lock", "go.sum", "gradle.lockfile", "flake.lock",
+        "mix.lock", "Package.resolved", "packages.lock.json",
+    )
+    private val MINIFIED = Regex("""\.min\.(js|css)$|\.(js|css)\.map$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Why a file's content should be left out of the diff, or null to include it. Generated directories only count
+     * outside source folders (a segment before them named `src`), so packages such as `com/acme/build` are kept.
+     */
+    internal fun omittedReason(relativePath: String): String? {
+        val segments = relativePath.replace('\\', '/').split('/').filter { it.isNotEmpty() }
+        val name = segments.lastOrNull() ?: return null
+        if (name in LOCK_FILES) return "lock file"
+        if (MINIFIED.containsMatchIn(name)) return "minified file or source map"
+        val dirs = segments.dropLast(1)
+        val srcIndex = dirs.indexOf("src").let { if (it < 0) Int.MAX_VALUE else it }
+        if (dirs.withIndex().any { (i, d) -> i < srcIndex && d in GENERATED_DIRS }) return "generated or build output"
+        return null
     }
 
     private fun relative(path: FilePath, rootDir: File): String =
