@@ -4,30 +4,49 @@
     <vendor url="https://github.com/AngelMinga/claude-commit">Angel Minga</vendor>
 
     <description><![CDATA[
-    <p>Generates <a href="https://www.conventionalcommits.org">Conventional Commits</a> messages from the
-    changes you select in the commit panel, using your local
-    <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> CLI.</p>
+    <p>Writes <a href="https://www.conventionalcommits.org">Conventional Commits</a> messages that read like your team wrote
+    them, from exactly the changes you are committing, with your local
+    <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> CLI and your Claude subscription. No API key.</p>
 
-    <p>Click the button next to <i>Amend</i> in the commit panel and the plugin will:</p>
+    <h3>Why this plugin</h3>
     <ul>
-      <li>build a diff of the checked files only (including unversioned files and partial commits),</li>
-      <li>send it to <code>claude -p</code> together with the current branch name,</li>
-      <li>show the detected change type (<code>feat</code>, <code>fix</code>, <code>refactor</code>, <code>docs</code>…) and why,</li>
-      <li>fill in the commit message for you to review.</li>
+      <li><b>Watch it write.</b> The message appears in the commit field as Claude writes it, with a live timer, so you are never
+      staring at an empty box.</li>
+      <li><b>Matches your repository's style.</b> It follows the scopes, capitalization and ticket format of your recent
+      commits, and picks up ticket IDs such as <code>ABC-123</code> from the branch name.</li>
+      <li><b>Only what you commit.</b> Uses just the checked files, honors partial commits (excluded hunks stay out) and
+      includes new unversioned files. Generated folders, lock files and minified bundles are listed by name only, so they
+      don't drown out the real change.</li>
+      <li><b>One click for another option.</b> Not happy with the message? <b>Retry</b> in the notification asks Claude for a
+      different one.</li>
+      <li><b>Light on your subscription.</b> Fast mode sends only the commit rules instead of Claude Code's full system prompt
+      and skips MCP servers, using far fewer tokens with the same model.</li>
+      <li><b>Private by design.</b> No telemetry. Claude runs with all tools disabled, so it can't read other files or run
+      commands; it only sees what the plugin sends (the diff, the branch name and recent commit titles). See the <a href="https://github.com/AngelMinga/claude-commit/blob/main/PRIVACY.md">privacy policy</a>.</li>
     </ul>
 
-    <p><b>Requirements:</b> macOS or Linux (Windows support is experimental), and the <code>claude</code> CLI installed and logged in. It uses your Claude
-    subscription; no API key is needed. Not affiliated with Anthropic.</p>
+    <h3>How it works</h3>
+    <ol>
+      <li>Check the files you want to commit.</li>
+      <li>Click <b>Generate Commit Message with Claude</b> next to <i>Amend</i> in the commit panel.</li>
+      <li>Review the message (the notification shows the detected type, such as <code>feat</code> or <code>fix</code>, and why) and commit.</li>
+    </ol>
 
-    <p>Not happy with the message? Click <b>Retry</b> in the notification to get a different one.</p>
+    <h3>Settings</h3>
+    <p><i>Settings → Tools → Commit Messages for Claude Code</i>: model (Haiku, Sonnet, Opus), message language (same as the
+    IDE by default), always include a scope, match recent commits, your own extra instructions, fast mode, timeout, and
+    whether to replace an existing message without asking. The plugin's own UI is available in English and Spanish.</p>
 
-    <p><b>Settings</b> (<i>Settings → Tools → Commit Messages for Claude Code</i>): model (Haiku, Sonnet, Opus), message
-    language, timeout, matching the style of recent commits, always including a scope, additional instructions, and whether to overwrite an existing message without asking.</p>
+    <h3>Requirements</h3>
+    <p>The <code>claude</code> CLI installed and logged in with your Claude subscription. macOS or Linux; Windows support is
+    experimental. Works in IntelliJ IDEA, WebStorm, Rider, Android Studio, DataGrip and other JetBrains IDEs, 2025.2 or later.</p>
 
-    <p>The plugin UI is available in English and Spanish and follows the IDE language.</p>
+    <p><i>Not affiliated with Anthropic.</i></p>
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.11.1</h3>
+    <ul><li>Clearer plugin description.</li></ul>
     <h3>1.11.0</h3>
     <ul>
       <li>Fast mode streams the reply: the commit message appears in the field as Claude writes it.</li>

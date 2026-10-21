@@ -84,6 +84,12 @@ The first version was uploaded by hand at plugins.jetbrains.com. For later ones:
 
 `GenerateCommitAction` flow (registered in `plugin.xml` under `Vcs.MessageActionGroup`):
 
+
+
+
+
+
+
 1. On the EDT it reads the checked files through the public `CheckinProjectPanel` (`Refreshable.PANEL_KEY`, provided next to `COMMIT_MESSAGE_CONTROL`): `selectedChanges` are the included changes, and the checked unversioned files are the `virtualFiles` that don't belong to a change; without a commit panel it uses the active changelist; with a panel and nothing checked, it warns and stops. It saves open documents (`saveAllDocuments`) and calls `setRunning(project, true)`: the `RUNNING` key disables the button and `update` swaps its icon **and its disabled icon** for `AnimatedIcon.Default` (without `disabledIcon` the disabled button paints a grayed-out static copy, so the spinner looks frozen; `ActivityTracker.inc()` refreshes the toolbar immediately); a `javax.swing.Timer` shows the elapsed seconds in the placeholder (`progress.placeholder.elapsed`) and in the progress indicator's `text2`; the message field (`CommitMessage.editorField`) shows the `progress.placeholder` hint, restored to `VcsBundle` `commit.message.placeholder` in `onFinished`.
 2. It starts a `Task.Backgroundable` that:
    - `DiffCollector.collect` → builds a unified diff with `IdeaTextPatchBuilder` + `UnifiedDiffWriter` from IntelliJ's revisions (VCS-agnostic, honors hunks excluded in partial commits). Unversioned files become `Change(null, CurrentContentRevision)`. Binaries → `[binary file]`. `omittedReason` keeps only the header line for generated directories (`build`, `dist`, `bin`, `node_modules`… unless a `src` segment comes before them), lock files and minified files/source maps. Truncated to 15,000 characters per file and 100,000 in total.
