@@ -1,0 +1,215 @@
+{
+  "name": "claude-commit",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "angelminga",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AngelMinga/claude-commit"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "AI"
+  ],
+  "keywords": [
+    "claude",
+    "commit",
+    "conventional commits",
+    "git"
+  ],
+  "main": "./out/extension.js",
+  "l10n": "./l10n",
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeCommit.generate",
+        "title": "%command.generate.title%",
+        "category": "Claude Commit",
+        "icon": {
+          "light": "media/icon-light.svg",
+          "dark": "media/icon-dark.svg"
+        },
+        "enablement": "!claudeCommit.running"
+      },
+      {
+        "command": "claudeCommit.cancel",
+        "title": "%command.cancel.title%",
+        "category": "Claude Commit",
+        "icon": "$(loading~spin)"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "claudeCommit.generate",
+          "when": "scmProvider == git && !claudeCommit.running",
+          "group": "navigation@-1"
+        },
+        {
+          "command": "claudeCommit.cancel",
+          "when": "scmProvider == git && claudeCommit.running",
+          "group": "navigation@-1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "claudeCommit.cancel",
+          "when": "claudeCommit.running"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%extension.displayName%",
+      "properties": {
+        "claudeCommit.model": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "haiku",
+            "sonnet",
+            "opus",
+            "fable"
+          ],
+          "enumItemLabels": [
+            "%settings.model.default%",
+            "Haiku",
+            "Sonnet",
+            "Opus",
+            "Fable"
+          ],
+          "enumDescriptions": [
+            "%settings.model.default%",
+            "%settings.model.haiku%",
+            "%settings.model.sonnet%",
+            "%settings.model.opus%",
+            "%settings.model.fable%"
+          ],
+          "markdownDescription": "%settings.model.comment%",
+          "order": 0
+        },
+        "claudeCommit.customModel": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%settings.model.custom.comment%",
+          "order": 1
+        },
+        "claudeCommit.effort": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "enumItemLabels": [
+            "%settings.effort.default%",
+            "%settings.effort.low%",
+            "%settings.effort.medium%",
+            "%settings.effort.high%",
+            "%settings.effort.xhigh%",
+            "%settings.effort.max%"
+          ],
+          "markdownDescription": "%settings.effort.comment%",
+          "order": 2
+        },
+        "claudeCommit.language": {
+          "type": "string",
+          "default": "IDE",
+          "enum": [
+            "IDE",
+            "English",
+            "Spanish",
+            "Portuguese",
+            "French",
+            "German",
+            "Italian"
+          ],
+          "enumItemLabels": [
+            "%settings.language.ide%",
+            "%settings.language.English%",
+            "%settings.language.Spanish%",
+            "%settings.language.Portuguese%",
+            "%settings.language.French%",
+            "%settings.language.German%",
+            "%settings.language.Italian%"
+          ],
+          "markdownDescription": "%settings.language%",
+          "order": 3
+        },
+        "claudeCommit.fastMode": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%settings.fast.comment%",
+          "order": 4
+        },
+        "claudeCommit.timeoutSec": {
+          "type": "integer",
+          "default": 180,
+          "minimum": 10,
+          "maximum": 900,
+          "markdownDescription": "%settings.timeout%",
+          "order": 5
+        },
+        "claudeCommit.imitateRepoStyle": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%settings.imitate.comment%",
+          "order": 6
+        },
+        "claudeCommit.alwaysIncludeScope": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%settings.scope.comment%",
+          "order": 7
+        },
+        "claudeCommit.extraInstructions": {
+          "type": "string",
+          "default": "",
+          "maxLength": 1000,
+          "editPresentation": "multilineText",
+          "markdownDescription": "%settings.extra.comment%",
+          "order": 8
+        },
+        "claudeCommit.overwriteWithoutAsking": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%settings.overwrite%",
+          "order": 9
+        },
+        "claudeCommit.claudePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "%settings.cli.path.comment%",
+          "order": 10
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "tsc -p . && node --test out/test/*.test.js",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "~1.95.0",
+    "@vscode/vsce": "^3.6.0",
+    "typescript": "^5.9.3"
+  }
+}
