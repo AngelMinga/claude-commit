@@ -30,7 +30,7 @@ without asking and the path to the `claude` executable.
 ```bash
 npm install
 npm test            # compiles and runs the unit tests (node:test)
-npm run package     # → claude-commit-<version>.vsix
+npm run package     # → commit-messages-for-claude-code-<version>.vsix
 ```
 
 Press F5 in VS Code to open an Extension Development Host with the extension loaded. Install the `.vsix` with

@@ -1,10 +1,15 @@
 {
-  "name": "claude-commit",
+  "name": "commit-messages-for-claude-code",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "0.1.0",
   "publisher": "angelminga",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#F5F0E8",
+    "theme": "light"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/AngelMinga/claude-commit"
