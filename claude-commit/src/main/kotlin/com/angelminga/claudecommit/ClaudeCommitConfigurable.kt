@@ -21,12 +21,17 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
 
     private val settings get() = ClaudeCommitSettings.getInstance().state
 
+    // CLI aliases: each one always points to the latest model of its family (checked with Claude Code 2.1.296).
     private val models = listOf(
         Option("", ClaudeCommitBundle.message("settings.model.default")),
         Option("haiku", ClaudeCommitBundle.message("settings.model.haiku")),
         Option("sonnet", ClaudeCommitBundle.message("settings.model.sonnet")),
         Option("opus", ClaudeCommitBundle.message("settings.model.opus")),
+        Option("fable", ClaudeCommitBundle.message("settings.model.fable")),
     )
+
+    private val efforts = listOf("", "low", "medium", "high", "xhigh", "max")
+        .map { Option(it, ClaudeCommitBundle.message("settings.effort.${it.ifEmpty { "default" }}")) }
 
     // The stored value stays in English because it is inserted into the (English) prompt; only the label is localized.
     // The first option follows the IDE language; its label shows which language that currently is.
@@ -36,6 +41,7 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
 
     override fun createPanel(): DialogPanel {
         val modelOptions = withCurrent(models, settings.model.orEmpty().trim())
+        val effortOptions = withCurrent(efforts, settings.effort.orEmpty().trim())
         val languageOptions = withCurrent(languages, settings.language?.trim() ?: ClaudeCommitSettings.DEFAULT_LANGUAGE)
 
         return panel {
@@ -46,6 +52,19 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
                         { settings.model = it?.value.orEmpty() },
                     )
                     .comment(ClaudeCommitBundle.message("settings.model.comment"))
+            }
+            row(ClaudeCommitBundle.message("settings.model.custom")) {
+                textField()
+                    .bindText({ settings.customModel.orEmpty() }, { settings.customModel = it.trim() })
+                    .comment(ClaudeCommitBundle.message("settings.model.custom.comment"))
+            }
+            row(ClaudeCommitBundle.message("settings.effort")) {
+                comboBox(effortOptions)
+                    .bindItem(
+                        { effortOptions.firstOrNull { it.value == settings.effort.orEmpty().trim() } ?: effortOptions.first() },
+                        { settings.effort = it?.value.orEmpty() },
+                    )
+                    .comment(ClaudeCommitBundle.message("settings.effort.comment"))
             }
             row(ClaudeCommitBundle.message("settings.language")) {
                 comboBox(languageOptions)
@@ -89,6 +108,12 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
             row {
                 checkBox(ClaudeCommitBundle.message("settings.overwrite"))
                     .bindSelected({ settings.overwriteWithoutAsking }, { settings.overwriteWithoutAsking = it })
+            }
+            row(ClaudeCommitBundle.message("settings.cli.path")) {
+                textField()
+                    .align(AlignX.FILL)
+                    .bindText({ settings.claudePath.orEmpty() }, { settings.claudePath = it.trim() })
+                    .comment(ClaudeCommitBundle.message("settings.cli.path.comment"))
             }
         }
     }

@@ -1,6 +1,6 @@
 # Privacy Policy — Commit Messages for Claude Code
 
-_Last updated: October 21, 2026 (version 1.11.0)_
+_Last updated: October 23, 2026 (version 1.12.0)_
 
 Commit Messages for Claude Code ("the plugin") is a JetBrains IDE plugin that generates commit messages using the Claude Code CLI installed on your computer. This page explains what data the plugin handles and where it goes.
 
@@ -42,7 +42,7 @@ To limit what is shared, the plugin runs the CLI with:
 
 ## What is stored on your computer
 
-The plugin only stores its settings (model, message language, timeout, the "fast mode", "match recent commits style", "always include a scope" and "overwrite without asking" options, and your additional instructions) in your IDE configuration, in `claudeCommit.xml`. They are not sent anywhere, except the additional instructions, which are included in the prompt as described above.
+The plugin only stores its settings (model, custom model, effort, path to the `claude` executable, message language, timeout, the "fast mode", "match recent commits style", "always include a scope" and "overwrite without asking" options, and your additional instructions) in your IDE configuration, in `claudeCommit.xml`. They are not sent anywhere, except the additional instructions, which are included in the prompt as described above.
 
 ## Changes and contact
 

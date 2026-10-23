@@ -27,11 +27,20 @@ class ClaudeCommitSettings : SimplePersistentStateComponent<ClaudeCommitSettings
         var alwaysIncludeScope by property(false)
         /** Short system prompt + no MCP servers, so Claude answers sooner (same model and rules). */
         var fastMode by property(true)
+        /** Any model name or alias typed by the user; overrides [model] when not empty. */
+        var customModel by string("")
+        /** `--effort` level (low, medium, high, xhigh, max); empty = the CLI's default. */
+        var effort by string("")
+        /** Path to the `claude` executable; empty = find it automatically. */
+        var claudePath by string("")
         /** Free text appended to the prompt (e.g. "Explain why in the body"). */
         var extraInstructions by string("")
     }
 
-    val model: String get() = state.model?.trim().orEmpty()
+    /** The model to pass to `--model`: the custom one if set, otherwise the one picked from the list (may be empty). */
+    val model: String get() = state.customModel?.trim()?.ifBlank { null } ?: state.model?.trim().orEmpty()
+    val effort: String get() = state.effort?.trim().orEmpty()
+    val claudePath: String get() = state.claudePath?.trim().orEmpty()
     /** Language name to put in the prompt (e.g. "Spanish"); resolves [LANGUAGE_IDE] to the current IDE language. */
     val language: String get() = resolveLanguage(state.language, DynamicBundle.getLocale())
     val extraInstructions: String get() = state.extraInstructions.orEmpty().trim().take(MAX_EXTRA_INSTRUCTIONS)

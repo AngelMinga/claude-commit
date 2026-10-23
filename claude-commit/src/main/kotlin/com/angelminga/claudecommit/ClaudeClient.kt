@@ -150,9 +150,9 @@ object ClaudeClient {
             previousSuggestion,
         )
         val invocation = if (SystemInfo.isWindows) {
-            windowsInvocation(windowsClaude(), prompt, diff, settings.model)
+            windowsInvocation(windowsClaude(settings), prompt, diff, settings.model, settings.effort)
         } else {
-            unixInvocation(defaultShell(), prompt, diff, settings.model)
+            unixInvocation(defaultShell(), prompt, diff, settings.model, settings.effort, unixClaude(settings))
         }
         return run(invocation, settings, indicator)
     }
@@ -187,13 +187,13 @@ object ClaudeClient {
             Unit
         }
         val raw = if (!SystemInfo.isWindows) {
-            run(unixFastInvocation(defaultShell(), system, user, settings.model), settings, indicator, onLine)
+            run(unixFastInvocation(defaultShell(), system, user, settings.model, settings.effort, unixClaude(settings)), settings, indicator, onLine)
         } else {
             // cmd.exe can't pass a multi-line argument, so on Windows the system prompt goes through a temporary file.
             val file = File.createTempFile("system-prompt", ".txt", neutralDir())
             try {
                 file.writeText(system, Charsets.UTF_8)
-                run(windowsFastInvocation(windowsClaude(), file.path, user, settings.model), settings, indicator, onLine)
+                run(windowsFastInvocation(windowsClaude(settings), file.path, user, settings.model, settings.effort), settings, indicator, onLine)
             } finally {
                 file.delete()
             }
@@ -230,13 +230,30 @@ object ClaudeClient {
         return CommitMessageParser.parse(res.stdout)
     }
 
-    private fun windowsClaude(): String =
-        findWindowsClaude(System.getenv()) { File(it).isFile }
+    private fun windowsClaude(settings: ClaudeCommitSettings): String =
+        configuredClaude(settings)
+            ?: findWindowsClaude(System.getenv()) { File(it).isFile }
             ?: throw IllegalStateException(ClaudeCommitBundle.message("error.cli.not.found"))
+
+    /** On macOS/Linux an empty result means "find `claude` through the login shell's PATH". */
+    private fun unixClaude(settings: ClaudeCommitSettings): String = configuredClaude(settings).orEmpty()
+
+    /** The executable set in the settings (with `~` expanded), or null if none; fails clearly if it doesn't exist. */
+    private fun configuredClaude(settings: ClaudeCommitSettings): String? {
+        val raw = settings.claudePath.ifBlank { return null }
+        val path = expandHome(raw, System.getProperty("user.home"))
+        if (!File(path).isFile) throw IllegalStateException(ClaudeCommitBundle.message("error.cli.path.invalid", raw))
+        return path
+    }
+
+    internal fun expandHome(path: String, home: String): String =
+        if (path == "~" || path.startsWith("~/") || path.startsWith("~\\")) home + path.substring(1) else path
 
     /** The CLI rejected an option (e.g. `error: unknown option '--strict-mcp-config'` on an older Claude Code). */
     internal fun isUnsupportedOption(res: ShellResult): Boolean =
         res.exitCode != 0 && UNSUPPORTED_OPTION.containsMatchIn(res.stderr + "\n" + res.stdout)
+
+    private val UNKNOWN_OPTION_NAME = Regex("""(--[\w-]+)""")
 
     private val UNSUPPORTED_OPTION =
         Regex("""unknown option|unknown argument|unrecognized (option|argument)|unexpected argument""", RegexOption.IGNORE_CASE)
@@ -358,8 +375,28 @@ object ClaudeClient {
      * paths with spaces.
      * --no-session-persistence: doesn't leave a session in the history for every commit.
      */
-    internal fun claudeArgs(model: String): List<String> =
-        listOf("-p", "--tools=", "--no-session-persistence") + (if (model.isNotBlank()) listOf("--model", model) else emptyList())
+    internal fun claudeArgs(model: String, effort: String = ""): List<String> =
+        listOf("-p", "--tools=", "--no-session-persistence") + modelAndEffortArgs(model, effort)
+
+    private fun modelAndEffortArgs(model: String, effort: String): List<String> =
+        (if (model.isNotBlank()) listOf("--model", model) else emptyList()) +
+            (if (effort.isNotBlank()) listOf("--effort", effort) else emptyList())
+
+    /**
+     * Shared start of the macOS/Linux scripts: PATH, then `--model` and (only if set) `--effort` added to `"$@"`
+     * with `set --`. With no effort and no custom path the script is exactly the original one.
+     */
+    private fun unixPrelude(effort: String): String =
+        "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
+            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
+            (if (effort.isNotBlank()) "set -- \"\$@\" --effort \"\$CLAUDE_COMMIT_EFFORT\"; " else "")
+
+    /** `claude` from PATH, or the configured executable (passed through an environment variable, never interpolated). */
+    private fun unixCommand(claudePath: String): String = if (claudePath.isBlank()) "claude" else "\"\$CLAUDE_COMMIT_BIN\""
+
+    private fun unixExtraEnv(effort: String, claudePath: String): Map<String, String> =
+        (if (effort.isNotBlank()) mapOf("CLAUDE_COMMIT_EFFORT" to effort) else emptyMap()) +
+            (if (claudePath.isNotBlank()) mapOf("CLAUDE_COMMIT_BIN" to claudePath) else emptyMap())
 
     /**
      * macOS/Linux: runs `claude` through a login shell so it finds the user's PATH. IntelliJ launched from the Dock
@@ -367,14 +404,20 @@ object ClaudeClient {
      * passed via environment variables to avoid interpolating user text into the script; the model is added with
      * `set --` because zsh doesn't split `${VAR:+--model "$VAR"}` into two arguments. The diff goes through stdin.
      */
-    internal fun unixInvocation(shell: String, prompt: String, diff: String, model: String): Invocation {
-        val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
-            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
-            "claude -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
+    internal fun unixInvocation(
+        shell: String,
+        prompt: String,
+        diff: String,
+        model: String,
+        effort: String = "",
+        claudePath: String = "",
+    ): Invocation {
+        val script = unixPrelude(effort) +
+            "${unixCommand(claudePath)} -p \"\$CLAUDE_COMMIT_PROMPT\" --tools \"\" --no-session-persistence \"\$@\""
         return Invocation(
             command = listOf(shell, "-l", "-c", script),
             stdin = diff,
-            env = mapOf("CLAUDE_COMMIT_PROMPT" to prompt, "CLAUDE_COMMIT_MODEL" to model),
+            env = mapOf("CLAUDE_COMMIT_PROMPT" to prompt, "CLAUDE_COMMIT_MODEL" to model) + unixExtraEnv(effort, claudePath),
         )
     }
 
@@ -382,8 +425,8 @@ object ClaudeClient {
      * Windows (experimental): runs the CLI without a shell. The prompt and the diff both go through stdin, because
      * `cmd.exe` would mangle a multi-line argument with quotes. `.cmd`/`.bat` shims (npm installs) need `cmd.exe /c`.
      */
-    internal fun windowsInvocation(claude: String, prompt: String, diff: String, model: String): Invocation {
-        return Invocation(command = windowsLauncher(claude) + claudeArgs(model), stdin = "$prompt\n\nDiff:\n$diff")
+    internal fun windowsInvocation(claude: String, prompt: String, diff: String, model: String, effort: String = ""): Invocation {
+        return Invocation(command = windowsLauncher(claude) + claudeArgs(model, effort), stdin = "$prompt\n\nDiff:\n$diff")
     }
 
     private fun windowsLauncher(claude: String): List<String> =
@@ -413,21 +456,33 @@ object ClaudeClient {
      * through an environment variable and the user message through stdin. No `--bare` (it breaks subscription login)
      * and no `--setting-sources`.
      */
-    internal fun unixFastInvocation(shell: String, systemPrompt: String, userMessage: String, model: String): Invocation {
-        val script = "export PATH=\"\$HOME/.local/bin:\$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; " +
-            "if [ -n \"\$CLAUDE_COMMIT_MODEL\" ]; then set -- --model \"\$CLAUDE_COMMIT_MODEL\"; else set --; fi; " +
-            "claude -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence " +
+    internal fun unixFastInvocation(
+        shell: String,
+        systemPrompt: String,
+        userMessage: String,
+        model: String,
+        effort: String = "",
+        claudePath: String = "",
+    ): Invocation {
+        val script = unixPrelude(effort) +
+            "${unixCommand(claudePath)} -p \"\$@\" --system-prompt \"\$CLAUDE_COMMIT_SYSTEM_PROMPT\" --tools \"\" --strict-mcp-config --no-session-persistence " +
             STREAM_ARGS.joinToString(" ")
         return Invocation(
             command = listOf(shell, "-l", "-c", script),
             stdin = userMessage,
-            env = mapOf("CLAUDE_COMMIT_SYSTEM_PROMPT" to systemPrompt, "CLAUDE_COMMIT_MODEL" to model),
+            env = mapOf("CLAUDE_COMMIT_SYSTEM_PROMPT" to systemPrompt, "CLAUDE_COMMIT_MODEL" to model) + unixExtraEnv(effort, claudePath),
         )
     }
 
     /** Windows fast mode (experimental): the system prompt is read from [systemPromptFile]; no quoted or empty args. */
-    internal fun windowsFastInvocation(claude: String, systemPromptFile: String, userMessage: String, model: String): Invocation {
-        val args = listOf("-p") + (if (model.isNotBlank()) listOf("--model", model) else emptyList()) +
+    internal fun windowsFastInvocation(
+        claude: String,
+        systemPromptFile: String,
+        userMessage: String,
+        model: String,
+        effort: String = "",
+    ): Invocation {
+        val args = listOf("-p") + modelAndEffortArgs(model, effort) +
             listOf("--system-prompt-file", systemPromptFile, "--tools=", "--strict-mcp-config", "--no-session-persistence") +
             STREAM_ARGS
         return Invocation(command = windowsLauncher(claude) + args, stdin = userMessage)
@@ -451,6 +506,8 @@ object ClaudeClient {
                 ClaudeCommitBundle.message("error.cli.not.found")
             res.exitCode != 0 && LOGIN_ERRORS.any { output.contains(it, ignoreCase = true) } ->
                 ClaudeCommitBundle.message("error.not.logged.in")
+            res.exitCode != 0 && UNSUPPORTED_OPTION.containsMatchIn(output) ->
+                ClaudeCommitBundle.message("error.cli.option.unsupported", UNKNOWN_OPTION_NAME.find(output)?.groupValues?.get(1) ?: "?")
             res.exitCode != 0 || res.stdout.isBlank() ->
                 ClaudeCommitBundle.message("error.cli.failed", res.exitCode, res.stderr.ifBlank { res.stdout }.take(500))
             else -> null
