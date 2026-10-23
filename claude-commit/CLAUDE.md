@@ -58,7 +58,7 @@ The version comes from `version` in `build.gradle.kts`. Install the zip with *Se
 
 ### Publish to JetBrains Marketplace
 
-The first version was uploaded by hand at plugins.jetbrains.com. For later ones: bump `version` in `build.gradle.kts`, add an entry to `<change-notes>` in `plugin.xml` and run `PUBLISH_TOKEN=<token> ./gradlew publishPlugin` (token from Marketplace → Profile → My Tokens; never commit it). Before publishing, run `./gradlew verifyPluginStructure` and the Plugin Verifier against the target IDEs.
+Releases are automated by `../.github/workflows/release.yml`: bump `version` in `build.gradle.kts`, add an entry to `<change-notes>` in `plugin.xml`, push and wait for CI to pass, then push a matching tag (`git tag v<version> && git push origin v<version>`). The workflow checks that the tag matches `version`, runs tests and the Plugin Verifier, publishes with `./gradlew publishPlugin` (repository secret `PUBLISH_TOKEN`, a Marketplace token; never commit it) and creates a GitHub Release with the zip and the change notes of that version (extracted from `<change-notes>`, so keep the `<h3>version</h3>` + `<li>` format). The Marketplace rejects a version number that was already uploaded. JetBrains still reviews each version before it goes public.
 
 ### Other
 

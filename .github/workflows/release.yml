@@ -1,0 +1,103 @@
+name: Release
+
+# Publishes a version when a tag such as v1.12.1 is pushed:
+#   git tag v1.12.1 && git push origin v1.12.1
+# The tag must match `version` in claude-commit/build.gradle.kts.
+on:
+  push:
+    tags: ['v*']
+
+# Needed to create the GitHub Release.
+permissions:
+  contents: write
+
+# Never run two releases at the same time, and never cancel one halfway through publishing.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: claude-commit
+
+jobs:
+  release:
+    name: Publish to JetBrains Marketplace and GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag matches the plugin version
+        run: |
+          VERSION=$(sed -nE 's/^version = "([^"]+)"$/\1/p' build.gradle.kts)
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "Tag: $GITHUB_REF_NAME · build.gradle.kts version: $VERSION"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $VERSION in build.gradle.kts. Nothing was published."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Check that the Marketplace token is configured
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          if [ -z "$PUBLISH_TOKEN" ]; then
+            echo "::error::The PUBLISH_TOKEN secret is missing (Settings → Secrets and variables → Actions). Nothing was published."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # "basic" is the open-source (MIT) cache; the default "enhanced" one is proprietary.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # The Plugin Verifier downloads IDEs of more than 1 GB each.
+      - name: Free disk space
+        working-directory: .
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # Same checks as CI: nothing is published if any of them fails.
+      - name: Test, build and verify
+        run: ./gradlew test buildPlugin verifyPluginStructure verifyPlugin
+
+      - name: Publish to JetBrains Marketplace
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: ./gradlew publishPlugin
+
+      - name: Extract release notes from plugin.xml
+        run: |
+          python3 - <<'EOF'
+          import os, re, html
+          version = os.environ["VERSION"]
+          xml = open("src/main/resources/META-INF/plugin.xml", encoding="utf-8").read()
+          notes = xml[xml.index("<change-notes>"):xml.index("</change-notes>")]
+          match = re.search(r"<h3>" + re.escape(version) + r"</h3>(.*?)(?=<h3>|\]\]>)", notes, re.S)
+          items = re.findall(r"<li>(.*?)</li>", match.group(1), re.S) if match else []
+
+          def to_markdown(item):
+              item = re.sub(r"<code>(.*?)</code>", r"`\1`", item, flags=re.S)
+              item = re.sub(r"<[^>]+>", "", item)
+              return re.sub(r"\s+", " ", html.unescape(item)).strip()
+
+          body = "\n".join("- " + to_markdown(i) for i in items) or "See the plugin page for details."
+          body += "\n\nInstall from JetBrains Marketplace (search for **Commit Messages for Claude Code**) or download the zip below and use *Settings → Plugins → ⚙ → Install Plugin from Disk…*."
+          open(os.environ["RUNNER_TEMP"] + "/release-notes.md", "w", encoding="utf-8").write(body)
+          print(body)
+          EOF
+
+      - name: Create GitHub Release with the plugin zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/distributions/claude-commit-"$VERSION".zip \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
