@@ -20,28 +20,28 @@ jobs:
     name: Test and build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
       # Caches Gradle and the IntelliJ Platform downloads, and validates the committed gradle-wrapper.jar.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Test, build and validate plugin.xml
         run: ./gradlew test buildPlugin verifyPluginStructure
 
       - name: Upload test report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-report
           path: claude-commit/build/reports/tests/test
 
       - name: Upload plugin zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-zip
           path: claude-commit/build/distributions/*.zip
@@ -51,14 +51,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Each IDE downloaded for verification takes more than 1 GB.
       - name: Free disk space
@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload verifier report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-verifier-report
           path: claude-commit/build/reports/pluginVerifier
