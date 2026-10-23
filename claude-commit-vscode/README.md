@@ -25,6 +25,11 @@ Under **Settings → Extensions → Commit Messages for Claude Code**: model and
 VS Code's), fast mode, timeout, match recent commit style, always include a scope, additional instructions, replace
 without asking and the path to the `claude` executable.
 
+## Privacy
+
+The extension sends nothing by itself and has no telemetry: the local `claude` CLI sends the data above to Anthropic
+under your own account. See the [privacy policy](https://github.com/AngelMinga/claude-commit/blob/main/PRIVACY.md).
+
 ## Development
 
 ```bash

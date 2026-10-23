@@ -44,7 +44,7 @@ claude-commit/
         └── StreamingTest.kt             # stream-json parsing, partial message, diff noise filter
 ```
 
-The repository root is the parent folder (`plugins-intellij/`), which also holds `LICENSE` (MIT) and `PRIVACY.md`.
+The repository root is the parent folder (`plugins-intellij/`), which also holds `LICENSE` (MIT), `PRIVACY.md` (covers this plugin and the VS Code extension) and `claude-commit-vscode/`, the VS Code port of this plugin (TypeScript, its own `CLAUDE.md`). Its `client.ts`, `parser.ts`, `streamJson.ts` and `diff.ts` mirror `ClaudeClient`, `CommitMessageParser`, `StreamJson` and `DiffCollector`: when the prompt, the reply format, the CLI flags or the error messages change here, make the same change there (its prompt test shares the golden text of `ClaudeClientLegacyGoldenTest`).
 
 ## Commands
 
@@ -58,7 +58,7 @@ The version comes from `version` in `build.gradle.kts`. Install the zip with *Se
 
 ### Publish to JetBrains Marketplace
 
-Releases are automated by `../.github/workflows/release.yml`: bump `version` in `build.gradle.kts`, add an entry to `<change-notes>` in `plugin.xml`, push and wait for CI to pass, then push a matching tag (`git tag v<version> && git push origin v<version>`). The workflow checks that the tag matches `version`, runs tests and the Plugin Verifier, publishes with `./gradlew publishPlugin` (repository secret `PUBLISH_TOKEN`, a Marketplace token; never commit it) and creates a GitHub Release with the zip and the change notes of that version (extracted from `<change-notes>`, so keep the `<h3>version</h3>` + `<li>` format). The Marketplace rejects a version number that was already uploaded. JetBrains still reviews each version before it goes public.
+Releases are automated by `../.github/workflows/release.yml`: bump `version` in `build.gradle.kts`, add an entry to `<change-notes>` in `plugin.xml`, push and wait for CI to pass, then push a matching tag (`git tag v<version> && git push origin v<version>`; the workflow only reacts to `v[0-9]*`, because the VS Code extension uses `vscode-v*` tags). The workflow checks that the tag matches `version`, runs tests and the Plugin Verifier, publishes with `./gradlew publishPlugin` (repository secret `PUBLISH_TOKEN`, a Marketplace token; never commit it) and creates a GitHub Release with the zip and the change notes of that version (extracted from `<change-notes>`, so keep the `<h3>version</h3>` + `<li>` format). The Marketplace rejects a version number that was already uploaded. JetBrains still reviews each version before it goes public.
 
 ### Other
 
@@ -71,7 +71,7 @@ Releases are automated by `../.github/workflows/release.yml`: bump `version` in 
 
 ### CI
 
-`../.github/workflows/ci.yml` (repository root) runs on every push to `main` and every pull request, in `claude-commit/`: job `build` runs `test buildPlugin verifyPluginStructure` and uploads the zip; job `verify` runs `verifyPlugin`. `pluginVerification` in `build.gradle.kts` fails on compatibility problems **and internal API usage** (what JetBrains Marketplace flags), not on missing dependencies, because the optional `com.intellij.platform.vcs` dependency only exists since 2026.3. The verifier only knows the APIs of the IDEs it checks: something that becomes internal in a newer IDE (e.g. an EAP) is only caught once that IDE is added to `ides { }`.
+`../.github/workflows/ci.yml` (repository root) runs on every push to `main` and every pull request, in `claude-commit/`: job `build` runs `test buildPlugin verifyPluginStructure` and uploads the zip; job `verify` runs `verifyPlugin`; job `vscode` tests and packages `../claude-commit-vscode`. `pluginVerification` in `build.gradle.kts` fails on compatibility problems **and internal API usage** (what JetBrains Marketplace flags), not on missing dependencies, because the optional `com.intellij.platform.vcs` dependency only exists since 2026.3. The verifier only knows the APIs of the IDEs it checks: something that becomes internal in a newer IDE (e.g. an EAP) is only caught once that IDE is added to `ides { }`.
 
 - Requires JDK 21 (`jvmToolchain(21)`). Compiles against IntelliJ IDEA Community 2025.2; `sinceBuild = 252`. VCS dependencies in `plugin.xml`: `com.intellij.modules.vcs` (required; up to 262 VCS lives in the platform core) and `com.intellij.platform.vcs` as optional with an empty `claudeCommit-platformVcs.xml` (since 263 VCS is that plugin and without this dependency its classes aren't visible). Don't remove either one. To check compatibility with a local IDE: `java -jar verifier-cli-<ver>-all.jar check-plugin build/distributions/claude-commit-<version>.zip "<IDE>.app/Contents"`. Compiling against 2026.3 requires IntelliJ Platform Gradle Plugin ≥ 2.19 and Gradle 9.
 - `buildSearchableOptions = false` and `kotlin.stdlib.default.dependency=false` (the platform's stdlib is used).
