@@ -28,7 +28,10 @@ jobs:
           java-version: 21
 
       # Caches Gradle and the IntelliJ Platform downloads, and validates the committed gradle-wrapper.jar.
+      # "basic" is the open-source (MIT) cache; the default "enhanced" one is proprietary.
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       - name: Test, build and validate plugin.xml
         run: ./gradlew test buildPlugin verifyPluginStructure
@@ -59,6 +62,8 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       # Each IDE downloaded for verification takes more than 1 GB.
       - name: Free disk space
