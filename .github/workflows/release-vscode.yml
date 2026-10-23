@@ -1,0 +1,106 @@
+name: Release VS Code extension
+
+# Publishes a version of the VS Code extension when a tag such as vscode-v0.2.0 is pushed:
+#   git tag vscode-v0.2.0 && git push origin vscode-v0.2.0
+# The tag must match `version` in claude-commit-vscode/package.json.
+on:
+  push:
+    tags: ['vscode-v*']
+
+# Needed to create the GitHub Release.
+permissions:
+  contents: write
+
+# Never run two releases at the same time, and never cancel one halfway through publishing.
+concurrency:
+  group: release-vscode
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: claude-commit-vscode
+
+jobs:
+  release:
+    name: Publish to VS Code Marketplace, Open VSX and GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag matches the extension version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#vscode-v}"
+          echo "Tag: $GITHUB_REF_NAME · package.json version: $VERSION"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $VERSION in package.json. Nothing was published."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      # VSCE_PAT is required. OVSX_PAT is optional: without it, Open VSX is skipped with a warning.
+      - name: Check that the publishing tokens are configured
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::The VSCE_PAT secret is missing (Settings → Secrets and variables → Actions). Nothing was published."
+            exit 1
+          fi
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::warning::The OVSX_PAT secret is missing: the extension will not be published to Open VSX."
+          else
+            echo "PUBLISH_OPEN_VSX=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: claude-commit-vscode/package-lock.json
+
+      - run: npm ci
+
+      - name: Configure git for the tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.com"
+
+      # Same checks as CI: nothing is published if they fail.
+      - name: Test and package
+        run: |
+          npm test
+          npx vsce package --out "extension.vsix"
+
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath extension.vsix
+
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: env.PUBLISH_OPEN_VSX == 'true'
+        run: npx ovsx publish extension.vsix
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v version="$VERSION" '
+            /^## / { if (found) exit; found = ($2 == version); next }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then echo "See the extension page for details." > "$RUNNER_TEMP/release-notes.md"; fi
+          printf '\nInstall from the VS Code Marketplace or Open VSX (search for **Commit Messages for Claude Code**), or download the vsix below and use *Extensions → ⋯ → Install from VSIX…*.\n' >> "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+
+      # Not marked as latest, so the repository's latest release stays the JetBrains plugin.
+      - name: Create GitHub Release with the vsix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp extension.vsix "commit-messages-for-claude-code-$VERSION.vsix"
+          gh release create "$GITHUB_REF_NAME" "commit-messages-for-claude-code-$VERSION.vsix" \
+            --title "VS Code extension $VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --latest=false

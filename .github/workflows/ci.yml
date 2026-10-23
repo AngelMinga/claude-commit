@@ -82,3 +82,38 @@ jobs:
         with:
           name: plugin-verifier-report
           path: claude-commit/build/reports/pluginVerifier
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: claude-commit-vscode
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: claude-commit-vscode/package-lock.json
+
+      - run: npm ci
+
+      # The diff tests create temporary repositories and commit to them.
+      - name: Configure git for the tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.com"
+
+      - name: Test
+        run: npm test
+
+      - name: Package
+        run: npx vsce package
+
+      - name: Upload extension vsix
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-extension
+          path: claude-commit-vscode/*.vsix
