@@ -30,14 +30,27 @@ class ClaudeCommitConfigurable : BoundConfigurable(ClaudeCommitBundle.message("s
         Option("fable", ClaudeCommitBundle.message("settings.model.fable")),
     )
 
-    private val efforts = listOf("", "low", "medium", "high", "xhigh", "max")
-        .map { Option(it, ClaudeCommitBundle.message("settings.effort.${it.ifEmpty { "default" }}")) }
+    // Keys are written out (not built from the value) so the IDE and @PropertyKey can check that they exist.
+    private val efforts = listOf(
+        Option("", ClaudeCommitBundle.message("settings.effort.default")),
+        Option("low", ClaudeCommitBundle.message("settings.effort.low")),
+        Option("medium", ClaudeCommitBundle.message("settings.effort.medium")),
+        Option("high", ClaudeCommitBundle.message("settings.effort.high")),
+        Option("xhigh", ClaudeCommitBundle.message("settings.effort.xhigh")),
+        Option("max", ClaudeCommitBundle.message("settings.effort.max")),
+    )
 
     // The stored value stays in English because it is inserted into the (English) prompt; only the label is localized.
     // The first option follows the IDE language; its label shows which language that currently is.
-    private val languages = listOf(Option(ClaudeCommitSettings.LANGUAGE_IDE, ideLanguageLabel())) +
-        listOf("English", "Spanish", "Portuguese", "French", "German", "Italian")
-            .map { Option(it, ClaudeCommitBundle.message("settings.language.$it")) }
+    private val languages = listOf(
+        Option(ClaudeCommitSettings.LANGUAGE_IDE, ideLanguageLabel()),
+        Option("English", ClaudeCommitBundle.message("settings.language.English")),
+        Option("Spanish", ClaudeCommitBundle.message("settings.language.Spanish")),
+        Option("Portuguese", ClaudeCommitBundle.message("settings.language.Portuguese")),
+        Option("French", ClaudeCommitBundle.message("settings.language.French")),
+        Option("German", ClaudeCommitBundle.message("settings.language.German")),
+        Option("Italian", ClaudeCommitBundle.message("settings.language.Italian")),
+    )
 
     override fun createPanel(): DialogPanel {
         val modelOptions = withCurrent(models, settings.model.orEmpty().trim())

@@ -49,8 +49,8 @@ intellijPlatform {
         // MISSING_DEPENDENCIES is left out on purpose: the optional com.intellij.platform.vcs dependency only exists
         // since 2026.3, so it is reported as missing on older IDEs even though the plugin is compatible there.
         ides {
-            ide(IntelliJPlatformType.IntellijIdeaCommunity, "2025.2.6")
-            ide(IntelliJPlatformType.IntellijIdeaUltimate, "2026.2.3")
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.2.6")
+            create(IntelliJPlatformType.IntellijIdeaUltimate, "2026.2.3")
         }
     }
     // ./gradlew publishPlugin with PUBLISH_TOKEN (Marketplace → Profile → My Tokens).
