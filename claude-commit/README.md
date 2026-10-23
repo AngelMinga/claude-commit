@@ -52,24 +52,14 @@ See [PRIVACY.md](../PRIVACY.md) for what is sent to Claude.
 
 ## Build
 
-**Option A – from IntelliJ (easiest)**
-
-1. *File → Open* → select the `claude-commit` folder.
-2. Wait for the Gradle import (use JDK 21 if asked).
-3. **Gradle** tool window → `Tasks → intellij platform → buildPlugin`.
-
-**Option B – terminal**
-
 ```bash
-brew install gradle      # first time only
 cd claude-commit
-gradle wrapper           # generates ./gradlew
 ./gradlew buildPlugin
 ```
 
-The plugin is written to `build/distributions/claude-commit-<version>.zip`.
+The plugin is written to `build/distributions/claude-commit-<version>.zip`. Requires JDK 21.
 
-To try it without installing: `./gradlew runIde` opens a sandbox IntelliJ with the plugin loaded.
+Other useful tasks: `./gradlew test`, `./gradlew verifyPlugin` (JetBrains Plugin Verifier) and `./gradlew runIde` (opens a sandbox IntelliJ with the plugin loaded). Every push and pull request runs the tests and the verifier on GitHub Actions.
 
 ## Customize
 

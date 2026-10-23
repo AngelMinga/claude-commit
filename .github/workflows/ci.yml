@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run that is still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: claude-commit
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Caches Gradle and the IntelliJ Platform downloads, and validates the committed gradle-wrapper.jar.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test, build and validate plugin.xml
+        run: ./gradlew test buildPlugin verifyPluginStructure
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: claude-commit/build/reports/tests/test
+
+      - name: Upload plugin zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: claude-commit/build/distributions/*.zip
+
+  verify:
+    name: Plugin Verifier
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Each IDE downloaded for verification takes more than 1 GB.
+      - name: Free disk space
+        working-directory: .
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # IDEs and failure levels (including internal API usage) are set in build.gradle.kts.
+      - name: Run IntelliJ Plugin Verifier
+        run: ./gradlew verifyPlugin
+
+      - name: Upload verifier report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-verifier-report
+          path: claude-commit/build/reports/pluginVerifier

@@ -12,7 +12,7 @@ A JetBrains IDE plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that adds a
 claude-commit/
 ├── build.gradle.kts                 # IntelliJ Platform Gradle Plugin, target IDE version, sinceBuild, test deps, publishing
 ├── gradle.properties / settings.gradle.kts
-├── gradle/wrapper/                  # only gradle-wrapper.properties (Gradle 8.14.3), no gradlew script
+├── gradlew / gradlew.bat / gradle/wrapper/  # Gradle wrapper (8.14.3)
 └── src/
     ├── main/kotlin/com/angelminga/claudecommit/
     │   ├── GenerateCommitAction.kt      # commit panel button; orchestrates the whole flow
@@ -49,19 +49,11 @@ The repository root is the parent folder (`plugins-intellij/`), which also holds
 
 ### Build the installable .zip
 
-The repo doesn't include the `gradlew` script. Two options:
-
 ```bash
-# A) Generate the wrapper once (requires `gradle`, e.g. `brew install gradle`) and use it
-gradle wrapper
-./gradlew buildPlugin
-
-# B) Without a wrapper: use the Gradle 8.14.3 that IntelliJ already downloaded into the cache
-G=$(ls -d ~/.gradle/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3/bin/gradle)
-$G clean test buildPlugin
+./gradlew buildPlugin        # → build/distributions/claude-commit-<version>.zip
 ```
 
-Output: `build/distributions/claude-commit-<version>.zip` (the version comes from `version` in `build.gradle.kts`). Install it with *Settings → Plugins → ⚙ → Install Plugin from Disk…* and restart the IDE. To reinstall, uninstall the previous version first or bump `version`.
+The version comes from `version` in `build.gradle.kts`. Install the zip with *Settings → Plugins → ⚙ → Install Plugin from Disk…* and restart the IDE. To reinstall, uninstall the previous version first or bump `version`.
 
 ### Publish to JetBrains Marketplace
 
@@ -73,7 +65,12 @@ The first version was uploaded by hand at plugins.jetbrains.com. For later ones:
 ./gradlew runIde        # opens a sandbox IntelliJ with the plugin loaded
 ./gradlew test          # JUnit 4 tests
 ./gradlew test --tests 'com.angelminga.claudecommit.CommitMessageParserTest'   # a single test class
+./gradlew verifyPlugin  # Plugin Verifier against IC-2025.2.6 and IU-2026.2.3 (downloads both IDEs the first time)
 ```
+
+### CI
+
+`../.github/workflows/ci.yml` (repository root) runs on every push to `main` and every pull request, in `claude-commit/`: job `build` runs `test buildPlugin verifyPluginStructure` and uploads the zip; job `verify` runs `verifyPlugin`. `pluginVerification` in `build.gradle.kts` fails on compatibility problems **and internal API usage** (what JetBrains Marketplace flags), not on missing dependencies, because the optional `com.intellij.platform.vcs` dependency only exists since 2026.3. The verifier only knows the APIs of the IDEs it checks: something that becomes internal in a newer IDE (e.g. an EAP) is only caught once that IDE is added to `ides { }`.
 
 - Requires JDK 21 (`jvmToolchain(21)`). Compiles against IntelliJ IDEA Community 2025.2; `sinceBuild = 252`. VCS dependencies in `plugin.xml`: `com.intellij.modules.vcs` (required; up to 262 VCS lives in the platform core) and `com.intellij.platform.vcs` as optional with an empty `claudeCommit-platformVcs.xml` (since 263 VCS is that plugin and without this dependency its classes aren't visible). Don't remove either one. To check compatibility with a local IDE: `java -jar verifier-cli-<ver>-all.jar check-plugin build/distributions/claude-commit-<version>.zip "<IDE>.app/Contents"`. Compiling against 2026.3 requires IntelliJ Platform Gradle Plugin ≥ 2.19 and Gradle 9.
 - `buildSearchableOptions = false` and `kotlin.stdlib.default.dependency=false` (the platform's stdlib is used).
