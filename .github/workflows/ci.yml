@@ -110,7 +110,7 @@ jobs:
         run: npm test
 
       - name: Package
-        run: npx vsce package
+        run: npm run package
 
       - name: Upload extension vsix
         uses: actions/upload-artifact@v7

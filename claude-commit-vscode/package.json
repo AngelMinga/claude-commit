@@ -208,7 +208,7 @@
     "compile": "tsc -p .",
     "watch": "tsc -watch -p .",
     "test": "tsc -p . && node --test out/test/*.test.js",
-    "package": "vsce package",
+    "package": "vsce package --baseContentUrl https://github.com/AngelMinga/claude-commit/blob/HEAD/claude-commit-vscode --baseImagesUrl https://github.com/AngelMinga/claude-commit/raw/HEAD/claude-commit-vscode",
     "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {

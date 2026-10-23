@@ -71,7 +71,7 @@ jobs:
       - name: Test and package
         run: |
           npm test
-          npx vsce package --out "extension.vsix"
+          npm run package -- --out extension.vsix
 
       - name: Publish to VS Code Marketplace
         env:

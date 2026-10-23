@@ -19,6 +19,20 @@ What is sent: the staged changes, or every change (including untracked files) wh
 VS Code commits. Generated folders, lock files and minified bundles are listed by name only. The current branch and,
 optionally, the titles of the last 20 commits are sent too, so Claude can match the repository's style.
 
+## Screenshots
+
+**Generate** — the Claude button in the Source Control view; the message streams into the commit box:
+
+![Claude button in the Source Control view](images/source-control.png)
+
+**Result** — the detected type and the reason, with **Retry** for a different wording:
+
+![Notification with the detected type and Retry](images/notification.png)
+
+**Settings** — model, language, fast mode, scope and more:
+
+![Extension settings](images/settings.png)
+
 ## Settings
 
 Under **Settings → Extensions → Commit Messages for Claude Code**: model and effort, message language (defaults to
