@@ -1,7 +1,11 @@
 .vscode/**
+.idea/**
 src/**
 out/test/**
 **/*.map
 **/*.ts
+**/*.iml
+.gitignore
 tsconfig.json
 node_modules/**
+CLAUDE.md
