@@ -2,3 +2,6 @@
 *.zip
 .idea/
 *.iml
+
+# MultiGit vive en su propio repositorio: https://github.com/AngelMinga/MultiGit
+MultiGit/
