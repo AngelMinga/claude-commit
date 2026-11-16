@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { ClientSettings, commitSection, parseRecentCommits, RECENT_COMMITS, suggest } from './client';
+import { ClientSettings, commitSection, parseRecentCommits, RECENT_COMMITS, suggest, SuggestRequest } from './client';
 import { collect, git } from './diff';
 import { setTranslator, t } from './l10n';
 import { resolveLanguage } from './language';
@@ -34,12 +34,31 @@ interface Repository {
 /** The request in progress; null when idle. Only one runs at a time. */
 let running: AbortController | null = null;
 
-export function activate(context: vscode.ExtensionContext): void {
+/**
+ * API for other extensions (e.g. MultiGit, which has its own commit box): the same message generation
+ * the Source Control button uses, for a diff the caller builds.
+ *
+ *     const ext = vscode.extensions.getExtension<ClaudeCommitApi>('angelminga.commit-messages-for-claude-code');
+ *     const api = await ext?.activate();
+ *     if (api?.version === 1) await api.suggest(api.readSettings(), { diff, branch, ... });
+ *
+ * Bump `version` only for incompatible changes; add optional members otherwise.
+ */
+export interface ClaudeCommitApi {
+    readonly version: 1;
+    /** The `claudeCommit.*` settings, resolved (custom model, language name for the prompt, limits…). */
+    readSettings(): ClientSettings & { imitateRepoStyle: boolean; overwriteWithoutAsking: boolean };
+    /** Runs `claude -p` on the diff and returns the parsed message. Throws CancelledError (name "CancelledError") when aborted. */
+    suggest(settings: ClientSettings, request: SuggestRequest): Promise<CommitSuggestion>;
+}
+
+export function activate(context: vscode.ExtensionContext): ClaudeCommitApi {
     setTranslator((message, ...args) => vscode.l10n.t(message, ...args));
     context.subscriptions.push(
         vscode.commands.registerCommand('claudeCommit.generate', (arg?: { rootUri?: vscode.Uri }) => start(arg)),
         vscode.commands.registerCommand('claudeCommit.cancel', () => running?.abort()),
     );
+    return { version: 1, readSettings, suggest };
 }
 
 export function deactivate(): void {

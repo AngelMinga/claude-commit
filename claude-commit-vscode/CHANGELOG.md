@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- API for other extensions: `activate()` returns `{ version: 1, readSettings, suggest }`, the same message generation as the Source Control button for a diff the caller builds. MultiGit uses it for its "Generate with Claude" button.
+
 ## 0.1.1
 
 - The package no longer includes local IDE project files.

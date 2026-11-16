@@ -44,6 +44,23 @@ without asking and the path to the `claude` executable.
 The extension sends nothing by itself and has no telemetry: the local `claude` CLI sends the data above to Anthropic
 under your own account. See the [privacy policy](https://github.com/AngelMinga/claude-commit/blob/main/PRIVACY.md).
 
+## API for other extensions
+
+Extensions with their own commit box can reuse the generation (MultiGit does):
+
+```ts
+const ext = vscode.extensions.getExtension('angelminga.commit-messages-for-claude-code');
+const api = await ext?.activate();
+if (api?.version === 1) {
+    const { type, message } = await api.suggest(api.readSettings(), {
+        diff, branch, recentCommits: [], previousSuggestion: null, projectCommitRules: null,
+        signal, onFastModeUnsupported: () => {}, onPartialText: () => {},
+    });
+}
+```
+
+`suggest` throws an error named `CancelledError` when `signal` is aborted.
+
 ## Development
 
 ```bash
